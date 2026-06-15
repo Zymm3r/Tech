@@ -195,11 +195,22 @@ export async function exportPdf(context: ResultContext) {
   }
 
   // --- Header ---
-  doc.setFillColor(14, 165, 233);
-  doc.roundedRect(40, 36, 42, 42, 10, 10, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.text("TP", 52, 63);
+  try {
+    const img = new Image();
+    img.src = "/logo.png";
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+    doc.addImage(img, "PNG", 40, 36, 46, 46);
+  } catch (err) {
+    console.warn("Failed to load logo, falling back to text:", err);
+    doc.setFillColor(14, 165, 233);
+    doc.roundedRect(40, 36, 42, 42, 10, 10, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.text("TP", 52, 63);
+  }
   
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(22);
