@@ -373,7 +373,7 @@ export function CalculatorDashboard() {
               <div className="space-y-1">
                 <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">คำนวณราคา</h1>
                 <p className="max-w-3xl text-sm text-muted-foreground md:text-base">
-                  เลือกช่างที่ต้องการ เลือกตัวคูณความเสี่ยง และดาวน์โหลดใบเสนอราคาได้ทันที
+                  เลือกนายช่างที่ต้องการ เลือกตัวคูณความเสี่ยง และดาวน์โหลดใบเสนอราคาได้ทันที
                 </p>
               </div>
             </div>
@@ -410,11 +410,11 @@ export function CalculatorDashboard() {
               />
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4 md:col-span-2 xl:col-span-2">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">หมายเหตุ</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">รายละเอียดงาน</p>
               <Textarea
                 value={store.projectConfig.notes}
                 onChange={(event) => handleProjectField("notes", event.target.value)}
-                placeholder="ข้อความหมายเหตุสำหรับใบเสนอราคา"
+                placeholder="ระบะรายละเอียดการทำงาน"
                 className="mt-2 min-h-[88px] resize-none"
               />
             </div>
@@ -449,7 +449,7 @@ export function CalculatorDashboard() {
             <Card>
               <CardHeader className="border-b border-border/70 bg-background/50">
                 <CardTitle>แผนราคา</CardTitle>
-                <CardDescription>เลือกแผนกำไรที่ต้องการใช้คำนวณ</CardDescription>
+                <CardDescription>เลือกกลุ่มแผนที่ต้องการใช้คำนวณ</CardDescription>
               </CardHeader>
               <CardContent className="p-6">
                 <select
@@ -466,8 +466,8 @@ export function CalculatorDashboard() {
 
             <Card>
               <CardHeader className="border-b border-border/70 bg-background/50">
-                <CardTitle>ช่าง</CardTitle>
-                <CardDescription>เลือกช่างที่ต้องการให้ปฏิบัติงานในโครงการนี้</CardDescription>
+                <CardTitle>นายช่าง</CardTitle>
+                <CardDescription>เลือกนายช่างที่ต้องการให้ปฏิบัติงานในโครงการนี้</CardDescription>
               </CardHeader>
               <CardContent className="p-6">
                 <div className="space-y-6">
@@ -574,7 +574,7 @@ export function CalculatorDashboard() {
                 </div>
 
                 <div className="rounded-2xl border border-border bg-background/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">ช่างที่เลือก</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">นายช่างที่เลือก</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedTechnicians.length ? (
                       selectedTechnicians.map((item) => (
@@ -610,7 +610,7 @@ export function CalculatorDashboard() {
                 </div>
 
                 <div className="rounded-2xl border border-border bg-background/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">หมายเหตุ</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">รายละเอียดงาน</p>
                   <p className="mt-2 text-lg font-semibold">{store.projectConfig.notes || "-"}</p>
                 </div>
 
