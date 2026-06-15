@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Plus } from "lucide-react";
 import { useDashboardStore } from "@/store/use-dashboard-store";
 import { Catalog } from "@/types";
 import { getSupabaseClient } from "@/lib/persistence";
@@ -162,12 +163,27 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
             </div>
           </section>
 
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => form.reset()} disabled={isSaving}>
-              เริ่มใหม่
-            </Button>
+          <div className="flex flex-col sm:flex-row justify-between gap-4 border-t border-border pt-6 mt-2">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => technicians.append({ id: crypto.randomUUID(), name: "", group: "Group A", basePrice: 0, active: true })}
+                disabled={isSaving}
+              >
+                <Plus className="mr-2 h-4 w-4" /> เพิ่มช่าง
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => multipliers.append({ id: crypto.randomUUID(), name: "", category: "ทั่วไป", multiplier: 1, active: true })}
+                disabled={isSaving}
+              >
+                <Plus className="mr-2 h-4 w-4" /> เพิ่มตัวคูณ
+              </Button>
+            </div>
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? "กำลังบันทึก..." : "บันทึกการตั้งค่า"}
+              {isSaving ? "กำลังบันทึก..." : "บันทึกลงฐานข้อมูล"}
             </Button>
           </div>
         </form>
