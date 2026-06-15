@@ -158,7 +158,7 @@ export function importProjectXlsx(arrayBuffer: ArrayBuffer): Partial<ProjectConf
   }
 }
 
-export function exportPdf(context: ResultContext) {
+export async function exportPdf(context: ResultContext) {
   const { catalog, projectConfig } = context;
   const planId = projectConfig.selectedPricingPlan || "high-profit";
   const uniquePlans = Array.from(new Set((catalog.pricingPlans || []).map(p => p.plan_id))).map(id => (catalog.pricingPlans || []).find(p => p.plan_id === id)!);
@@ -168,10 +168,28 @@ export function exportPdf(context: ResultContext) {
   const selectedMultipliers = catalog.multipliers.filter((item) => projectConfig.selectedMultiplierIds.includes(item.id));
   const basePrice = calculateBasePrice(catalog.technicians, projectConfig.selectedTechnicianIds, planId, catalog.pricingPlans);
   const multiplierProduct = calculateMultiplier(catalog.multipliers, projectConfig.selectedMultiplierIds);
-  const finalPrice = calculateFinalPrice(basePrice, multiplierProduct);
+  const finalPrice = Math.round(calculateFinalPrice(basePrice, multiplierProduct));
   const timestamp = new Date().toISOString();
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+  try {
+    const fontRes = await fetch("/fonts/NotoSansThai-Regular.ttf");
+    if (fontRes.ok) {
+      const buffer = await fontRes.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64Font = window.btoa(binary);
+      doc.addFileToVFS("NotoSansThai.ttf", base64Font);
+      doc.addFont("NotoSansThai.ttf", "NotoSansThai", "normal");
+      doc.setFont("NotoSansThai");
+    }
+  } catch (err) {
+    console.error("Failed to load Thai font:", err);
+  }
 
   doc.setFillColor(14, 165, 233);
   doc.roundedRect(40, 36, 42, 42, 10, 10, "F");
@@ -199,7 +217,7 @@ export function exportPdf(context: ResultContext) {
       ...selectedTechnicians.map((item) => ["ช่าง", item.name, item.group, formatTHB(resolveTechnicianPrice(item, planId, catalog.pricingPlans, item.basePrice)), "-"]),
       ...selectedMultipliers.map((item) => ["ตัวคูณ", item.name, item.category, "-", item.multiplier.toFixed(2)])
     ],
-    styles: { fontSize: 10, cellPadding: 6 },
+    styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
     headStyles: { fillColor: [15, 23, 42] }
   });
 

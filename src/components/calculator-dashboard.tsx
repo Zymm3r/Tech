@@ -307,8 +307,8 @@ export function CalculatorDashboard() {
     }
   }
 
-  function handleExportPdf() {
-    exportPdf({
+  async function handleExportPdf() {
+    await exportPdf({
       catalog,
       projectConfig: {
         ...store.projectConfig,
