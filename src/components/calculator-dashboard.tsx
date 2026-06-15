@@ -31,7 +31,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsModal } from "@/components/settings-modal";
 import { DEFAULT_CATALOG } from "@/lib/default-data";
 import { APP_VERSION } from "@/lib/constants";
-import { calculateBasePrice, calculateMultiplierProduct } from "@/lib/calculations";
+import { calculateBasePrice, calculateMultiplier, calculateFinalPrice, resolveTechnicianPrice } from "@/lib/pricing-engine";
 import { exportCurrentConfiguration, exportPdf, downloadWorkbook } from "@/components/export-utils";
 import { Catalog, Multiplier, ProjectConfig, Technician } from "@/types";
 import { formatNumber, formatTHB, formatTimestamp } from "@/lib/utils";
@@ -77,12 +77,17 @@ export function CalculatorDashboard() {
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<LoadedSource>("default");
   const [importError, setImportError] = useState<string | null>(null);
-  const [saveState, setSaveState] = useState<string>("Idle");
+  const [saveState, setSaveState] = useState<string>("ว่าง");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const catalog = store.catalog ?? DEFAULT_CATALOG;
   const technicians = catalog.technicians.filter((item) => item.active);
   const multipliers = catalog.multipliers.filter((item) => item.active);
+  
+  const pricingPlans = useMemo(() => catalog.pricingPlans ?? DEFAULT_CATALOG.pricingPlans ?? [], [catalog.pricingPlans]);
+  const uniquePlans = Array.from(new Set(pricingPlans.map(p => p.plan_id))).map(id => pricingPlans.find(p => p.plan_id === id)!);
+  const selectedPricingPlanId = store.projectConfig.selectedPricingPlan || "high-profit";
+  const selectedPricingPlanName = uniquePlans.find(p => p.plan_id === selectedPricingPlanId)?.plan_name || "กำไรสูง";
 
   const selectedTechnicians = useMemo(
     () => technicians.filter((item) => store.projectConfig.selectedTechnicianIds.includes(item.id)),
@@ -93,18 +98,19 @@ export function CalculatorDashboard() {
     [multipliers, store.projectConfig.selectedMultiplierIds]
   );
 
-  const basePrice = calculateBasePrice(technicians, store.projectConfig.selectedTechnicianIds);
-  const multiplierProduct = calculateMultiplierProduct(multipliers, store.projectConfig.selectedMultiplierIds);
-  const finalPrice = Math.round(basePrice * multiplierProduct);
+  const basePrice = calculateBasePrice(technicians, store.projectConfig.selectedTechnicianIds, selectedPricingPlanId, pricingPlans);
+  const multiplierProduct = calculateMultiplier(multipliers, store.projectConfig.selectedMultiplierIds);
+  const finalPrice = Math.round(calculateFinalPrice(basePrice, multiplierProduct));
 
   const formulaPreview = useMemo(() => {
-    const baseExpression = selectedTechnicians.length ? selectedTechnicians.map((item) => formatNumber(item.basePrice)).join(" + ") : "0";
+    const resolvedPrices = selectedTechnicians.map(t => resolveTechnicianPrice(t, selectedPricingPlanId, pricingPlans, t.basePrice));
+    const baseExpression = selectedTechnicians.length ? resolvedPrices.map((p) => formatNumber(p)).join(" + ") : "0";
     const multiplierExpression = selectedMultipliers.map((item) => item.multiplier.toFixed(1)).join(" × ");
     if (!selectedMultipliers.length) {
       return `(${baseExpression}) = ${formatNumber(basePrice)}`;
     }
     return `(${baseExpression}) × ${multiplierExpression} = ${formatNumber(finalPrice)}`;
-  }, [basePrice, finalPrice, selectedMultipliers, selectedTechnicians]);
+  }, [basePrice, finalPrice, selectedMultipliers, selectedTechnicians, selectedPricingPlanId, pricingPlans]);
 
   useEffect(() => {
     let mounted = true;
@@ -134,11 +140,12 @@ export function CalculatorDashboard() {
         }
 
         try {
-          const [technicianBook, multiplierBook] = await Promise.all([
-            readWorkbookFromUrl("/data/technicians.xlsx"),
-            readWorkbookFromUrl("/data/multipliers.xlsx")
+          const [technicianBook, multiplierBook, pricingPlanBook] = await Promise.all([
+            readWorkbookFromUrl("/data/technicians.xlsx").catch(() => null),
+            readWorkbookFromUrl("/data/multipliers.xlsx").catch(() => null),
+            readWorkbookFromUrl("/data/pricing_plans.xlsx").catch(() => null)
           ]);
-          const spreadsheetCatalog = catalogFromWorkbook(technicianBook, multiplierBook);
+          const spreadsheetCatalog = catalogFromWorkbook(technicianBook, multiplierBook, pricingPlanBook);
           if (spreadsheetCatalog) {
             useDashboardStore.getState().setCatalog(spreadsheetCatalog, true);
             setSource("spreadsheet");
@@ -192,9 +199,9 @@ export function CalculatorDashboard() {
     });
   }
 
-  function handleProjectField(key: keyof Omit<ProjectConfig, "version" | "lastSavedAt">, value: string) {
+  function handleProjectField(key: keyof ProjectConfig, value: string) {
     snapshotAnd(() => {
-      store.setProjectField(key, value);
+      store.setProjectField(key as any, value);
       store.touchSavedAt();
     });
   }
@@ -206,20 +213,20 @@ export function CalculatorDashboard() {
     saveLocalCatalog(snapshot.catalog ?? DEFAULT_CATALOG);
     saveLocalHistory(store.history);
     saveCloudConfig(snapshot.projectConfig, snapshot.catalog).catch(() => undefined);
-    setSaveState(`Saved ${format(new Date(), "HH:mm:ss")}`);
+    setSaveState(`บันทึกเมื่อ ${format(new Date(), "HH:mm:ss")}`);
   }
 
   function handleReset() {
     snapshotAnd(() => {
       store.reset();
-      setSaveState("Reset configuration");
+      setSaveState("เริ่มใหม่แล้ว");
     });
   }
 
   function handleUndo() {
     store.undo();
     store.touchSavedAt();
-    setSaveState("Undo applied");
+    setSaveState("ย้อนกลับแล้ว");
   }
 
   function handleExportJson() {
@@ -237,12 +244,12 @@ export function CalculatorDashboard() {
     const workbook = createTemplateWorkbook(catalog);
     if (kind === "technician") {
       const blank = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(blank, workbook.Sheets.Technicians, "Technicians");
+      if (workbook.Sheets.Technicians) XLSX.utils.book_append_sheet(blank, workbook.Sheets.Technicians, "Technicians");
       downloadWorkbook("Technician Template.xlsx", blank);
       return;
     }
     const blank = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(blank, workbook.Sheets.Multipliers, "Multipliers");
+    if (workbook.Sheets.Multipliers) XLSX.utils.book_append_sheet(blank, workbook.Sheets.Multipliers, "Multipliers");
     downloadWorkbook("Multiplier Template.xlsx", blank);
   }
 
@@ -267,7 +274,7 @@ export function CalculatorDashboard() {
       const text = await file.text();
       const parsed = JSON.parse(text) as Partial<{ projectConfig: ProjectConfig; catalog: Catalog }>;
       if (!parsed.projectConfig || typeof parsed.projectConfig !== "object") {
-        throw new Error("Missing projectConfig");
+        throw new Error("ไม่มีข้อมูล projectConfig");
       }
       const importedConfig = parsed.projectConfig;
       snapshotAnd(() => {
@@ -277,20 +284,21 @@ export function CalculatorDashboard() {
         }
       });
       setImportError(null);
-      setSaveState(`Imported ${file.name}`);
+      setSaveState(`นำเข้าข้อมูล ${file.name}`);
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Invalid configuration file");
+      setImportError(error instanceof Error ? error.message : "ไฟล์ไม่ถูกต้อง");
     }
   }
 
   async function handleHardReload() {
     setLoading(true);
     try {
-      const [technicianBook, multiplierBook] = await Promise.all([
-        readWorkbookFromUrl("/data/technicians.xlsx"),
-        readWorkbookFromUrl("/data/multipliers.xlsx")
+      const [technicianBook, multiplierBook, pricingPlanBook] = await Promise.all([
+        readWorkbookFromUrl("/data/technicians.xlsx").catch(() => null),
+        readWorkbookFromUrl("/data/multipliers.xlsx").catch(() => null),
+        readWorkbookFromUrl("/data/pricing_plans.xlsx").catch(() => null)
       ]);
-      const spreadsheetCatalog = catalogFromWorkbook(technicianBook, multiplierBook);
+      const spreadsheetCatalog = catalogFromWorkbook(technicianBook, multiplierBook, pricingPlanBook);
       if (spreadsheetCatalog) {
         useDashboardStore.getState().setCatalog(spreadsheetCatalog, true);
       }
@@ -318,20 +326,19 @@ export function CalculatorDashboard() {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary" className="rounded-full px-3 py-1">
-                  Production Dashboard
+                  ระบบคำนวณราคา
                 </Badge>
                 <Badge variant="outline" className="rounded-full px-3 py-1">
-                  Version {APP_VERSION}
+                  เวอร์ชัน {APP_VERSION}
                 </Badge>
                 <Badge variant="outline" className="rounded-full px-3 py-1">
-                  Source: {source}
+                  แหล่งข้อมูล: {source}
                 </Badge>
               </div>
               <div className="space-y-1">
-                <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">Technician Pricing Dashboard</h1>
+                <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">คำนวณราคา</h1>
                 <p className="max-w-3xl text-sm text-muted-foreground md:text-base">
-                  Select technicians, stack risk multipliers, and export a quotation instantly. Spreadsheet files in
-                  /public/data stay authoritative when present.
+                  เลือกช่างที่ต้องการ เลือกตัวคูณความเสี่ยง และดาวน์โหลดใบเสนอราคาได้ทันที (ใช้ข้อมูลจากโฟลเดอร์ /public/data)
                 </p>
               </div>
             </div>
@@ -340,59 +347,59 @@ export function CalculatorDashboard() {
               <ThemeToggle />
               <Button variant="outline" onClick={() => setSettingsOpen(true)}>
                 <Settings2 className="h-4 w-4" />
-                Settings
+                ตั้งค่า
               </Button>
               <Button variant="outline" onClick={handleImportClick}>
                 <Import className="h-4 w-4" />
-                Import Configuration
+                นำเข้าข้อมูล
               </Button>
               <Button variant="outline" onClick={handleExportJson}>
                 <FileJson2 className="h-4 w-4" />
-                Export Current Configuration
+                บันทึกข้อมูล JSON
               </Button>
               <Button onClick={handleExportPdf}>
                 <Download className="h-4 w-4" />
-                Export Result PDF
+                ดาวน์โหลด PDF
               </Button>
             </div>
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Project Name</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">ชื่อโครงการ</p>
               <Input
                 value={store.projectConfig.projectName}
                 onChange={(event) => handleProjectField("projectName", event.target.value)}
-                placeholder="Project name"
+                placeholder="ชื่อโครงการ"
                 className="mt-2"
               />
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Customer Name</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">ชื่อลูกค้า</p>
               <Input
                 value={store.projectConfig.customerName}
                 onChange={(event) => handleProjectField("customerName", event.target.value)}
-                placeholder="Customer name"
+                placeholder="ชื่อลูกค้า"
                 className="mt-2"
               />
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4 md:col-span-2 xl:col-span-2">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Notes</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">หมายเหตุ</p>
               <Textarea
                 value={store.projectConfig.notes}
                 onChange={(event) => handleProjectField("notes", event.target.value)}
-                placeholder="Quotation notes for the PDF"
+                placeholder="ข้อความหมายเหตุสำหรับใบเสนอราคา"
                 className="mt-2 min-h-[88px] resize-none"
               />
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Saved</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">บันทึกล่าสุด</p>
               <p className="mt-3 text-lg font-semibold">{formatTimestamp(store.projectConfig.lastSavedAt)}</p>
               <p className="text-sm text-muted-foreground">{saveState}</p>
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Persistence</p>
-              <p className="mt-3 text-lg font-semibold">Local + optional Supabase</p>
-              <p className="text-sm text-muted-foreground">Cloud sync activates when env vars are set.</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">ระบบการจัดเก็บ</p>
+              <p className="mt-3 text-lg font-semibold">เครื่องนี้ + Supabase (ถ้ามี)</p>
+              <p className="text-sm text-muted-foreground">ซิงค์คลาวด์อัตโนมัติหากมีการตั้งค่า Env</p>
             </div>
           </div>
         </header>
@@ -407,59 +414,79 @@ export function CalculatorDashboard() {
         ) : null}
 
         <div className="grid gap-6 xl:grid-cols-[1.05fr_1.05fr_1fr]">
-          <Card className="overflow-hidden">
-            <CardHeader className="border-b border-border/70 bg-background/50">
-              <CardTitle>Technician Selection</CardTitle>
-              <CardDescription>Touch-friendly checklist pulled from the workbook source.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <ScrollArea className="h-[62vh]">
-                <div className="space-y-6 p-6">
-                  {Object.entries(technicianGroups).map(([group, items]) => (
-                    <section key={group} className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Badge className="rounded-full px-3 py-1">{group}</Badge>
-                        <span className="text-sm text-muted-foreground">{items.length} technicians</span>
-                      </div>
-                      <div className="grid gap-3">
-                        {items.map((item) => {
-                          const checked = store.projectConfig.selectedTechnicianIds.includes(item.id);
-                          return (
-                            <label
-                              key={item.id}
-                              className={cn(
-                                "flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4 transition",
-                                checked ? "border-primary/50 bg-primary/10" : "border-border bg-background/60 hover:bg-accent/50"
-                              )}
-                            >
-                              <div className="flex items-center gap-4">
-                                <Checkbox checked={checked} onCheckedChange={(value) => handleTechnicianToggle(item.id, value === true)} />
-                                <div className="space-y-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <p className="text-base font-medium">{item.name}</p>
-                                    <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px]">
-                                      Active
-                                    </Badge>
-                                  </div>
-                                  <p className="text-sm text-muted-foreground">{item.group}</p>
-                                </div>
-                              </div>
-                              <p className="text-lg font-semibold">{formatTHB(item.basePrice)}</p>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </section>
+          <div className="flex flex-col gap-6">
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b border-border/70 bg-background/50">
+                <CardTitle>แผนราคา</CardTitle>
+                <CardDescription>เลือกแผนกำไรที่ต้องการใช้คำนวณ</CardDescription>
+              </CardHeader>
+              <CardContent className="p-6">
+                <select
+                  value={selectedPricingPlanId}
+                  onChange={(e) => handleProjectField("selectedPricingPlan", e.target.value)}
+                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {uniquePlans.map(p => (
+                    <option key={p.plan_id} value={p.plan_id}>{p.plan_name}</option>
                   ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
+                </select>
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden flex-1">
+              <CardHeader className="border-b border-border/70 bg-background/50">
+                <CardTitle>ช่าง</CardTitle>
+                <CardDescription>เลือกช่างที่ต้องการให้ปฏิบัติงานในโครงการนี้</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="h-[50vh]">
+                  <div className="space-y-6 p-6">
+                    {Object.entries(technicianGroups).map(([group, items]) => (
+                      <section key={group} className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <Badge className="rounded-full px-3 py-1">{group}</Badge>
+                          <span className="text-sm text-muted-foreground">{items.length} คน</span>
+                        </div>
+                        <div className="grid gap-3">
+                          {items.map((item) => {
+                            const checked = store.projectConfig.selectedTechnicianIds.includes(item.id);
+                            return (
+                              <label
+                                key={item.id}
+                                className={cn(
+                                  "flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4 transition",
+                                  checked ? "border-primary/50 bg-primary/10" : "border-border bg-background/60 hover:bg-accent/50"
+                                )}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <Checkbox checked={checked} onCheckedChange={(value) => handleTechnicianToggle(item.id, value === true)} />
+                                  <div className="space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="text-base font-medium">{item.name}</p>
+                                      <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px]">
+                                        พร้อมทำงาน
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">{item.group}</p>
+                                  </div>
+                                </div>
+                                <p className="text-lg font-semibold">{formatTHB(resolveTechnicianPrice(item, selectedPricingPlanId, pricingPlans, item.basePrice))}</p>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
 
           <Card className="overflow-hidden">
             <CardHeader className="border-b border-border/70 bg-background/50">
-              <CardTitle>Risk Multiplier Selection</CardTitle>
-              <CardDescription>Multiple selections stack automatically.</CardDescription>
+              <CardTitle>ตัวคูณ</CardTitle>
+              <CardDescription>เลือกความเสี่ยงที่เกี่ยวข้อง (สามารถเลือกซ้อนกันได้)</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <ScrollArea className="h-[62vh]">
@@ -470,7 +497,7 @@ export function CalculatorDashboard() {
                         <Badge className="rounded-full px-3 py-1" variant="secondary">
                           {category}
                         </Badge>
-                        <span className="text-sm text-muted-foreground">{items.length} options</span>
+                        <span className="text-sm text-muted-foreground">{items.length} รายการ</span>
                       </div>
                       <div className="grid gap-3">
                         {items.map((item) => {
@@ -504,13 +531,18 @@ export function CalculatorDashboard() {
 
           <Card className="sticky top-4 h-fit overflow-hidden xl:sticky">
             <CardHeader className="border-b border-border/70 bg-background/50">
-              <CardTitle>Live Calculation Summary</CardTitle>
-              <CardDescription>Formula preview updates on every selection.</CardDescription>
+              <CardTitle>สรุปการคำนวณ</CardTitle>
+              <CardDescription>ดูตัวอย่างสูตรการคำนวณแบบเรียลไทม์</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 p-6">
               <div className="grid gap-4">
                 <div className="rounded-2xl border border-border bg-background/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Selected Technicians</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">แผนราคา</p>
+                  <p className="mt-2 text-lg font-semibold">{selectedPricingPlanName}</p>
+                </div>
+                
+                <div className="rounded-2xl border border-border bg-background/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">ช่างที่เลือก</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedTechnicians.length ? (
                       selectedTechnicians.map((item) => (
@@ -519,18 +551,18 @@ export function CalculatorDashboard() {
                         </Badge>
                       ))
                     ) : (
-                      <span className="text-sm text-muted-foreground">No technicians selected.</span>
+                      <span className="text-sm text-muted-foreground">ยังไม่ได้เลือกช่าง</span>
                     )}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-border bg-background/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Base Price</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">ราคาเริ่มต้น</p>
                   <p className="mt-2 text-2xl font-semibold">{formatTHB(basePrice)}</p>
                 </div>
 
                 <div className="rounded-2xl border border-border bg-background/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Applied Multipliers</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">ตัวคูณที่ใช้</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedMultipliers.length ? (
                       selectedMultipliers.map((item) => (
@@ -539,13 +571,13 @@ export function CalculatorDashboard() {
                         </Badge>
                       ))
                     ) : (
-                      <span className="text-sm text-muted-foreground">No multipliers selected.</span>
+                      <span className="text-sm text-muted-foreground">ยังไม่ได้เลือกตัวคูณ</span>
                     )}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-border bg-background/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Formula Preview</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">สูตรคำนวณ</p>
                   <p className="mt-3 rounded-xl bg-muted/60 p-4 text-sm leading-6">{formulaPreview}</p>
                 </div>
               </div>
@@ -553,51 +585,51 @@ export function CalculatorDashboard() {
               <Separator />
 
               <div className="rounded-[1.5rem] border border-primary/25 bg-primary/10 p-5">
-                <p className="text-sm font-medium text-primary">Final Price</p>
+                <p className="text-sm font-medium text-primary">ราคารวม</p>
                 <p className="mt-2 text-4xl font-bold tracking-tight md:text-5xl">{formatTHB(finalPrice)}</p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {selectedTechnicians.length} technicians · {selectedMultipliers.length} multipliers
+                  {selectedTechnicians.length} คน · {selectedMultipliers.length} ตัวคูณ
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <Button variant="outline" onClick={handleUndo}>
                   <Undo2 className="h-4 w-4" />
-                  Undo
+                  ย้อนกลับ
                 </Button>
                 <Button variant="outline" onClick={handleReset}>
                   <RefreshCcw className="h-4 w-4" />
-                  Reset
+                  เริ่มใหม่
                 </Button>
                 <Button onClick={handleSaveConfiguration}>
                   <Save className="h-4 w-4" />
-                  Save
+                  บันทึก
                 </Button>
                 <Button variant="outline" onClick={handleHardReload}>
                   <Files className="h-4 w-4" />
-                  Reload Sheets
+                  โหลดข้อมูล Spreadsheet ใหม่
                 </Button>
                 <Button variant="outline" onClick={() => handleTemplateDownload("technician")}>
                   <FileDown className="h-4 w-4" />
-                  Technician Template.xlsx
+                  ไฟล์แม่แบบช่าง.xlsx
                 </Button>
                 <Button variant="outline" onClick={() => handleTemplateDownload("multiplier")}>
                   <FileDown className="h-4 w-4" />
-                  Multiplier Template.xlsx
+                  ไฟล์แม่แบบตัวคูณ.xlsx
                 </Button>
               </div>
 
               <div className="grid gap-3 rounded-2xl border border-border bg-background/70 p-4 text-sm text-muted-foreground">
                 <div className="flex items-center justify-between">
-                  <span>Spreadsheet source</span>
+                  <span>แหล่งข้อมูล Spreadsheet</span>
                   <span className="font-medium text-foreground">{source}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Local saved at</span>
+                  <span>บันทึกล่าสุดในเครื่อง</span>
                   <span className="font-medium text-foreground">{formatTimestamp(store.projectConfig.lastSavedAt)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Version</span>
+                  <span>เวอร์ชัน</span>
                   <span className="font-medium text-foreground">{store.projectConfig.version}</span>
                 </div>
               </div>

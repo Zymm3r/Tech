@@ -1,4 +1,4 @@
-import { Catalog, Multiplier, Technician } from "@/types";
+import { Catalog, Multiplier, Technician, PricingPlan } from "@/types";
 import * as XLSX from "xlsx";
 
 function toBoolean(value: unknown) {
@@ -32,13 +32,19 @@ export async function readWorkbookFromUrl(url: string) {
   return XLSX.read(arrayBuffer, { type: "array" });
 }
 
-export function catalogFromWorkbook(technicianBook?: XLSX.WorkBook | null, multiplierBook?: XLSX.WorkBook | null): Catalog | null {
+export function catalogFromWorkbook(
+  technicianBook?: XLSX.WorkBook | null,
+  multiplierBook?: XLSX.WorkBook | null,
+  pricingPlanBook?: XLSX.WorkBook | null
+): Catalog | null {
   const technicians = technicianBook ? sheetToTechnicians(technicianBook) : [];
   const multipliers = multiplierBook ? sheetToMultipliers(multiplierBook) : [];
-  if (!technicians.length && !multipliers.length) return null;
+  const pricingPlans = pricingPlanBook ? sheetToPricingPlans(pricingPlanBook) : [];
+  if (!technicians.length && !multipliers.length && !pricingPlans.length) return null;
   return {
     technicians,
-    multipliers
+    multipliers,
+    pricingPlans
   };
 }
 
@@ -68,6 +74,19 @@ export function sheetToMultipliers(workbook: XLSX.WorkBook): Multiplier[] {
   }));
 }
 
+export function sheetToPricingPlans(workbook: XLSX.WorkBook): PricingPlan[] {
+  const sheet = workbook.Sheets["PricingPlans"];
+  if (!sheet) return [];
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+  return rows.map((row) => ({
+    plan_id: String(row.plan_id || ""),
+    plan_name: String(row.plan_name || ""),
+    group: String(row.group || ""),
+    price: toNumber(row.price, 0),
+    active: toBoolean(row.active)
+  }));
+}
+
 export function catalogToWorkbook(catalog: Catalog) {
   const techniciansSheet = XLSX.utils.json_to_sheet(
     catalog.technicians.map((item) => ({
@@ -90,6 +109,20 @@ export function catalogToWorkbook(catalog: Catalog) {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, techniciansSheet, "Technicians");
   XLSX.utils.book_append_sheet(workbook, multipliersSheet, "Multipliers");
+  
+  if (catalog.pricingPlans) {
+    const pricingPlansSheet = XLSX.utils.json_to_sheet(
+      catalog.pricingPlans.map((item) => ({
+        plan_id: item.plan_id,
+        plan_name: item.plan_name,
+        group: item.group,
+        price: item.price,
+        active: item.active ? "true" : "false"
+      }))
+    );
+    XLSX.utils.book_append_sheet(workbook, pricingPlansSheet, "PricingPlans");
+  }
+
   return workbook;
 }
 

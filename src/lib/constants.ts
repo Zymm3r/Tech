@@ -10,5 +10,6 @@ export const DEFAULT_PROJECT_CONFIG = {
   notes: "",
   selectedTechnicianIds: [],
   selectedMultiplierIds: [],
+  selectedPricingPlan: "high-profit",
   lastSavedAt: null
 };

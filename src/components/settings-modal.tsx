@@ -38,6 +38,7 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
 
   function onSubmit(values: FormValues) {
     const nextCatalog: Catalog = {
+      ...catalog,
       technicians: values.technicians.map((item) => ({
         ...item,
         basePrice: Number(item.basePrice),
@@ -58,30 +59,30 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>Adjust browser-local fallback values for technicians and multipliers.</DialogDescription>
+          <DialogTitle>ตั้งค่า</DialogTitle>
+          <DialogDescription>ปรับปรุงข้อมูลสำรอง (Fallback) ของช่างและตัวคูณสำหรับเบราว์เซอร์นี้</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <section className="space-y-4">
-            <h3 className="text-base font-semibold">Technicians</h3>
+            <h3 className="text-base font-semibold">ช่าง</h3>
             <div className="grid gap-4 md:grid-cols-2">
               {technicians.fields.map((field, index) => (
                 <div key={field.id} className="rounded-2xl border border-border p-4">
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2 md:col-span-2">
-                      <Label>Name</Label>
+                      <Label>ชื่อ</Label>
                       <Input {...form.register(`technicians.${index}.name` as const)} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Group</Label>
+                      <Label>กลุ่ม</Label>
                       <Input {...form.register(`technicians.${index}.group` as const)} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Price</Label>
+                      <Label>ราคา</Label>
                       <Input type="number" {...form.register(`technicians.${index}.basePrice` as const, { valueAsNumber: true })} />
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <Label>Active</Label>
+                      <Label>พร้อมทำงาน</Label>
                       <input type="checkbox" className="ml-2 h-5 w-5" {...form.register(`technicians.${index}.active` as const)} />
                     </div>
                   </div>
@@ -91,25 +92,25 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
           </section>
 
           <section className="space-y-4">
-            <h3 className="text-base font-semibold">Multipliers</h3>
+            <h3 className="text-base font-semibold">ตัวคูณ</h3>
             <div className="grid gap-4 md:grid-cols-2">
               {multipliers.fields.map((field, index) => (
                 <div key={field.id} className="rounded-2xl border border-border p-4">
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2 md:col-span-2">
-                      <Label>Name</Label>
+                      <Label>ชื่อ</Label>
                       <Input {...form.register(`multipliers.${index}.name` as const)} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Category</Label>
+                      <Label>หมวดหมู่</Label>
                       <Input {...form.register(`multipliers.${index}.category` as const)} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Multiplier</Label>
+                      <Label>ตัวคูณ</Label>
                       <Input type="number" step="0.1" {...form.register(`multipliers.${index}.multiplier` as const, { valueAsNumber: true })} />
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <Label>Active</Label>
+                      <Label>พร้อมทำงาน</Label>
                       <input type="checkbox" className="ml-2 h-5 w-5" {...form.register(`multipliers.${index}.active` as const)} />
                     </div>
                   </div>
@@ -120,9 +121,9 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
 
           <div className="flex justify-end gap-3">
             <Button type="button" variant="outline" onClick={() => form.reset()}>
-              Reset Form
+              เริ่มใหม่
             </Button>
-            <Button type="submit">Save Settings</Button>
+            <Button type="submit">บันทึกการตั้งค่า</Button>
           </div>
         </form>
       </DialogContent>
