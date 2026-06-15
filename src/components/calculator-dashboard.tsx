@@ -278,7 +278,7 @@ export function CalculatorDashboard() {
       const arrayBuffer = await file.arrayBuffer();
       const imported = importProjectXlsx(arrayBuffer);
       if (!imported) {
-        throw new Error("ไม่สามารถอ่านข้อมูลจากไฟล์ Excel ได้ (ต้องมีชีท 'สรุปงาน')");
+        throw new Error("ไม่สามารถอ่านข้อมูลจากไฟล์ Excel ได้ (ต้องมีชีท 'Project Metadata' หรือ 'สรุปงาน')");
       }
 
       // Resolve multiplier IDs from names

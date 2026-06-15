@@ -110,9 +110,9 @@ export function exportProjectXlsx(context: ResultContext) {
   }]);
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, summarySheet, "สรุปงาน");
-  XLSX.utils.book_append_sheet(workbook, techSheet, "ช่าง");
-  XLSX.utils.book_append_sheet(workbook, multSheet, "ตัวคูณ");
+  XLSX.utils.book_append_sheet(workbook, summarySheet, "Project Metadata");
+  XLSX.utils.book_append_sheet(workbook, techSheet, "Selected Technicians");
+  XLSX.utils.book_append_sheet(workbook, multSheet, "Selected Multipliers");
   XLSX.utils.book_append_sheet(workbook, formulaSheet, "สูตรคำนวณ");
 
   downloadWorkbook(`project-${format(new Date(), "yyyy-MM-dd")}.xlsx`, workbook);
@@ -125,19 +125,19 @@ export function importProjectXlsx(arrayBuffer: ArrayBuffer): Partial<ProjectConf
     const workbook = XLSX.read(arrayBuffer, { type: "array" });
 
     // Read สรุปงาน sheet
-    const summarySheet = workbook.Sheets["สรุปงาน"];
+    const summarySheet = workbook.Sheets["Project Metadata"] || workbook.Sheets["สรุปงาน"];
     if (!summarySheet) return null;
     const summaryRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(summarySheet, { defval: "" });
     if (!summaryRows.length) return null;
     const summary = summaryRows[0];
 
     // Read ช่าง sheet
-    const techSheet = workbook.Sheets["ช่าง"];
+    const techSheet = workbook.Sheets["Selected Technicians"] || workbook.Sheets["ช่าง"];
     const techRows = techSheet ? XLSX.utils.sheet_to_json<Record<string, unknown>>(techSheet, { defval: "" }) : [];
     const selectedTechnicianIds = techRows.map(r => String(r.technician_id || "")).filter(Boolean);
 
     // Read ตัวคูณ sheet
-    const multSheet = workbook.Sheets["ตัวคูณ"];
+    const multSheet = workbook.Sheets["Selected Multipliers"] || workbook.Sheets["ตัวคูณ"];
     const multRows = multSheet ? XLSX.utils.sheet_to_json<Record<string, unknown>>(multSheet, { defval: "" }) : [];
     const selectedMultiplierIds = multRows.map(r => String(r.multiplier_name || r.name || "")).filter(Boolean);
 
