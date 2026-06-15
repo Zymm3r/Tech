@@ -98,10 +98,6 @@ export function CalculatorDashboard() {
   const multiplierProduct = calculateMultiplier(multipliers, store.projectConfig.selectedMultiplierIds);
   const finalPrice = Math.round(calculateFinalPrice(basePrice, multiplierProduct));
 
-  const sumMultiplier = useMemo(
-    () => selectedMultipliers.reduce((sum, m) => sum + m.multiplier, 0),
-    [selectedMultipliers]
-  );
 
   const formulaPreview = useMemo(() => {
     const resolvedPrices = selectedTechnicians.map(t => resolveTechnicianPrice(t, selectedPricingPlanId, pricingPlans, t.basePrice));
@@ -616,7 +612,7 @@ export function CalculatorDashboard() {
                   </div>
                   {selectedMultipliers.length > 0 && (
                     <p className="mt-3 text-sm text-muted-foreground">
-                      ผลรวมตัวคูณ: <span className="font-semibold text-foreground">{sumMultiplier.toFixed(2)}</span>
+                      ตัวคูณสุทธิ: <span className="font-semibold text-foreground">{multiplierProduct.toFixed(2)}</span>
                     </p>
                   )}
                 </div>

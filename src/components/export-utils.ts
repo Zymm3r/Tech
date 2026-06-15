@@ -73,7 +73,7 @@ export function exportProjectXlsx(context: ResultContext) {
     base_price: basePrice,
     multipliers_name: selectedMultipliers.map(m => m.name).join(", "),
     multipliers_value: selectedMultipliers.map(m => m.multiplier.toFixed(1)).join(", "),
-    Sum_multiplier: selectedMultipliers.reduce((sum, m) => sum + m.multiplier, 0),
+    Total_multiplier: multiplierProduct,
     final_price: finalPrice,
     notes: projectConfig.notes || "",
     created_at: new Date().toISOString()
