@@ -292,14 +292,12 @@ export function CalculatorDashboard() {
 
       snapshotAnd(() => {
         store.importSnapshot({
-          ...store.projectConfig,
-          projectName: imported.projectName ?? store.projectConfig.projectName,
+          version: imported.version ?? store.projectConfig.version,
           customerName: imported.customerName ?? store.projectConfig.customerName,
           notes: imported.notes ?? store.projectConfig.notes,
           selectedTechnicianIds: imported.selectedTechnicianIds ?? store.projectConfig.selectedTechnicianIds,
           selectedMultiplierIds: resolvedMultiplierIds.length ? resolvedMultiplierIds : store.projectConfig.selectedMultiplierIds,
           selectedPricingPlan: imported.selectedPricingPlan ?? store.projectConfig.selectedPricingPlan,
-          version: APP_VERSION,
           lastSavedAt: new Date().toISOString()
         });
       });
@@ -408,16 +406,7 @@ export function CalculatorDashboard() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">ชื่อโครงการ</p>
-              <Input
-                value={store.projectConfig.projectName}
-                onChange={(event) => handleProjectField("projectName", event.target.value)}
-                placeholder="ชื่อโครงการ"
-                className="mt-2"
-              />
-            </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">ชื่อลูกค้า</p>
               <Input

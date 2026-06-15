@@ -150,7 +150,6 @@ export function importProjectXlsx(arrayBuffer: ArrayBuffer): Partial<ProjectConf
     const planId = formulaRows.length ? String(formulaRows[0].pricing_plan || summary.pricing_plan || "high-profit") : String(summary.pricing_plan || "high-profit");
 
     return {
-      projectName: String(summary.project_name || ""),
       customerName: String(summary.customer_name || ""),
       notes: String(summary.notes || ""),
       selectedTechnicianIds,
@@ -212,10 +211,9 @@ export async function exportPdf(context: ResultContext) {
 
   doc.setFontSize(11);
   doc.setTextColor(15, 23, 42);
-  doc.text(`ชื่อโครงการ: ${projectConfig.projectName || "-"}`, 40, 112);
-  doc.text(`ชื่อลูกค้า: ${projectConfig.customerName || "-"}`, 40, 128);
-  doc.text(`แผนราคา: ${selectedPricingPlanName}`, 40, 144);
-  doc.text(`หมายเหตุ: ${projectConfig.notes || "-"}`, 40, 160);
+  doc.text(`ชื่อลูกค้า: ${(projectConfig as any).customerName || "-"}`, 40, 112);
+  doc.text(`แผนราคา: ${selectedPricingPlanName}`, 40, 128);
+  doc.text(`หมายเหตุ: ${(projectConfig as any).notes || "-"}`, 40, 144);
 
   // --- Section 1: รายการช่าง ---
   doc.setFontSize(14);

@@ -31,7 +31,6 @@ export type Catalog = {
 
 export type ProjectConfig = {
   version: string;
-  projectName: string;
   customerName: string;
   notes: string;
   selectedTechnicianIds: string[];
