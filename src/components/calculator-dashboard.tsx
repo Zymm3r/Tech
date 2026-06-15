@@ -414,7 +414,7 @@ export function CalculatorDashboard() {
               <Textarea
                 value={store.projectConfig.notes}
                 onChange={(event) => handleProjectField("notes", event.target.value)}
-                placeholder="ระบะรายละเอียดการทำงาน"
+                placeholder="ระบุรายละเอียดการทำงาน"
                 className="mt-2 min-h-[88px] resize-none"
               />
             </div>
