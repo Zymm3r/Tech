@@ -98,6 +98,11 @@ export function CalculatorDashboard() {
   const multiplierProduct = calculateMultiplier(multipliers, store.projectConfig.selectedMultiplierIds);
   const finalPrice = Math.round(calculateFinalPrice(basePrice, multiplierProduct));
 
+  const sumMultiplier = useMemo(
+    () => selectedMultipliers.reduce((sum, m) => sum + m.multiplier, 0),
+    [selectedMultipliers]
+  );
+
   const formulaPreview = useMemo(() => {
     const resolvedPrices = selectedTechnicians.map(t => resolveTechnicianPrice(t, selectedPricingPlanId, pricingPlans, t.basePrice));
     const baseExpression = selectedTechnicians.length ? resolvedPrices.map((p) => formatNumber(p)).join(" + ") : "0";
@@ -576,11 +581,16 @@ export function CalculatorDashboard() {
                 </div>
 
                 <div className="rounded-2xl border border-border bg-background/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">ชื่อลูกค้า</p>
+                  <p className="mt-2 text-lg font-semibold">{store.projectConfig.customerName || "-"}</p>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-background/70 p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">ช่างที่เลือก</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedTechnicians.length ? (
                       selectedTechnicians.map((item) => (
-                        <Badge key={item.id} variant="secondary" className="rounded-full px-3 py-1">{item.name}</Badge>
+                        <Badge key={item.id} variant="secondary" className="rounded-full px-3 py-1">{item.name} ({item.group})</Badge>
                       ))
                     ) : (
                       <span className="text-sm text-muted-foreground">ยังไม่ได้เลือกช่าง</span>
@@ -604,6 +614,21 @@ export function CalculatorDashboard() {
                       <span className="text-sm text-muted-foreground">ยังไม่ได้เลือกตัวคูณ</span>
                     )}
                   </div>
+                  {selectedMultipliers.length > 0 && (
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      ผลรวมตัวคูณ: <span className="font-semibold text-foreground">{sumMultiplier.toFixed(2)}</span>
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-border bg-background/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">หมายเหตุ</p>
+                  <p className="mt-2 text-lg font-semibold">{store.projectConfig.notes || "-"}</p>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-background/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">วัน-เวลาที่สร้าง</p>
+                  <p className="mt-2 text-lg font-semibold">{formatTimestamp(store.projectConfig.lastSavedAt)}</p>
                 </div>
 
                 <div className="rounded-2xl border border-border bg-background/70 p-4">
