@@ -223,11 +223,22 @@ export async function exportPdf(context: ResultContext) {
   // ==========================================
   
   // Left side: Logo & Company Placeholder
-  doc.setFillColor(14, 165, 233); // Primary blue
-  doc.roundedRect(margin, currentY, 42, 42, 8, 8, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.text("TP", margin + 10, currentY + 28);
+  try {
+    const img = new Image();
+    img.src = "/logo.png";
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+    doc.addImage(img, "PNG", margin, currentY, 46, 46);
+  } catch (err) {
+    console.warn("Failed to load logo:", err);
+    doc.setFillColor(14, 165, 233); // Primary blue
+    doc.roundedRect(margin, currentY, 42, 42, 8, 8, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.text("TP", margin + 10, currentY + 28);
+  }
   
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(14);
