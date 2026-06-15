@@ -19,6 +19,13 @@ type FormValues = {
 export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const catalog = useDashboardStore((state) => state.catalog);
   const setCatalog = useDashboardStore((state) => state.setCatalog);
+  
+  const uniqueGroups = Array.from(new Set([
+    ...(catalog?.pricingPlans?.map(p => p.group) || []),
+    ...(catalog?.technicians?.map(t => t.group) || []),
+    "Group A", "Group B", "Group C"
+  ])).filter(Boolean);
+
   const form = useForm<FormValues>({
     defaultValues: {
       technicians: catalog?.technicians ?? [],
@@ -75,7 +82,14 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
                     </div>
                     <div className="space-y-2">
                       <Label>กลุ่ม</Label>
-                      <Input {...form.register(`technicians.${index}.group` as const)} />
+                      <select
+                        {...form.register(`technicians.${index}.group` as const)}
+                        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {uniqueGroups.map(g => (
+                          <option key={g} value={g}>{g}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="space-y-2">
                       <Label>ราคา</Label>
