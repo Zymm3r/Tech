@@ -5,7 +5,7 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { Catalog, ProjectConfig } from "@/types";
-import { calculateBasePrice, calculateMultiplier, calculateFinalPrice, resolveTechnicianPrice } from "@/lib/pricing-engine";
+import { calculateBasePrice, calculateMultiplier, calculateFinalPrice, resolveTechnicianPrice, sortPricingPlans } from "@/lib/pricing-engine";
 import { formatTHB } from "@/lib/utils";
 import { NotoSansThaiBase64 } from "@/lib/fonts";
 
@@ -162,8 +162,8 @@ export function importProjectXlsx(arrayBuffer: ArrayBuffer): Partial<ProjectConf
 export async function exportPdf(context: ResultContext) {
   const { catalog, projectConfig } = context;
   const planId = projectConfig.selectedPricingPlan || "high-profit";
-  const uniquePlans = Array.from(new Set((catalog.pricingPlans || []).map(p => p.plan_id))).map(id => (catalog.pricingPlans || []).find(p => p.plan_id === id)!);
-  const selectedPricingPlanName = uniquePlans.find(p => p.plan_id === planId)?.plan_name || "กำไรสูง";
+  const uniquePlans = sortPricingPlans(Array.from(new Set((catalog.pricingPlans || []).map(p => p.plan_id))).map(id => (catalog.pricingPlans || []).find(p => p.plan_id === id)!));
+  const selectedPricingPlanName = uniquePlans.find(p => p.plan_id === planId)?.plan_name || planId;
 
   const selectedTechnicians = catalog.technicians.filter((item) => projectConfig.selectedTechnicianIds.includes(item.id));
   const selectedMultipliers = catalog.multipliers.filter((item) => projectConfig.selectedMultiplierIds.includes(item.id));

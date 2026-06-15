@@ -21,14 +21,14 @@ export const DEFAULT_CATALOG: Catalog = {
     { id: "site-check", category: "สภาพหน้างาน", name: "ไล่เช็ค ไม่มีแบบ / ความลับสูง", multiplier: 1.3, active: true }
   ],
   pricingPlans: [
-    { plan_id: "high-profit", plan_name: "กำไรสูง", group: "Group A", price: 2400, active: true },
-    { plan_id: "high-profit", plan_name: "กำไรสูง", group: "Group B", price: 2000, active: true },
-    { plan_id: "high-profit", plan_name: "กำไรสูง", group: "Group C", price: 1500, active: true },
-    { plan_id: "medium-profit", plan_name: "กำไรกลาง", group: "Group A", price: 2000, active: true },
-    { plan_id: "medium-profit", plan_name: "กำไรกลาง", group: "Group B", price: 1800, active: true },
-    { plan_id: "medium-profit", plan_name: "กำไรกลาง", group: "Group C", price: 1500, active: true },
-    { plan_id: "flat-rate", plan_name: "ราคาเท่ากัน", group: "Group A", price: 1500, active: true },
-    { plan_id: "flat-rate", plan_name: "ราคาเท่ากัน", group: "Group B", price: 1500, active: true },
-    { plan_id: "flat-rate", plan_name: "ราคาเท่ากัน", group: "Group C", price: 1500, active: true }
+    { plan_id: "high-profit", plan_name: "กลุ่มที่ 1 (กำไรสูง)", group: "Group A", price: 2400, active: true, display_order: 1 },
+    { plan_id: "high-profit", plan_name: "กลุ่มที่ 1 (กำไรสูง)", group: "Group B", price: 2000, active: true, display_order: 1 },
+    { plan_id: "high-profit", plan_name: "กลุ่มที่ 1 (กำไรสูง)", group: "Group C", price: 1500, active: true, display_order: 1 },
+    { plan_id: "medium-profit", plan_name: "กลุ่มที่ 2 (กำไรปานกลาง)", group: "Group A", price: 2000, active: true, display_order: 2 },
+    { plan_id: "medium-profit", plan_name: "กลุ่มที่ 2 (กำไรปานกลาง)", group: "Group B", price: 1800, active: true, display_order: 2 },
+    { plan_id: "medium-profit", plan_name: "กลุ่มที่ 2 (กำไรปานกลาง)", group: "Group C", price: 1500, active: true, display_order: 2 },
+    { plan_id: "flat-rate", plan_name: "กลุ่มที่ 3 (ราคาเท่ากัน)", group: "Group A", price: 1500, active: true, display_order: 3 },
+    { plan_id: "flat-rate", plan_name: "กลุ่มที่ 3 (ราคาเท่ากัน)", group: "Group B", price: 1500, active: true, display_order: 3 },
+    { plan_id: "flat-rate", plan_name: "กลุ่มที่ 3 (ราคาเท่ากัน)", group: "Group C", price: 1500, active: true, display_order: 3 }
   ]
 };

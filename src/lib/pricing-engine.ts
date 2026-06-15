@@ -44,3 +44,17 @@ export function calculateMultiplier(
 export function calculateFinalPrice(basePrice: number, multiplier: number): number {
   return basePrice * multiplier;
 }
+
+export function sortPricingPlans<T extends { plan_id: string; display_order?: number }>(plans: T[]): T[] {
+  const DEFAULT_ORDER = ["high-profit", "medium-profit", "flat-rate"];
+  return [...plans].sort((a, b) => {
+    // If both have display_order, use it
+    if (a.display_order !== undefined && b.display_order !== undefined) {
+      return a.display_order - b.display_order;
+    }
+    // Fallback to DEFAULT_ORDER
+    const indexA = DEFAULT_ORDER.indexOf(a.plan_id);
+    const indexB = DEFAULT_ORDER.indexOf(b.plan_id);
+    return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+  });
+}

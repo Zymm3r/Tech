@@ -10,7 +10,7 @@ export async function loadCatalogFromSupabase(): Promise<Catalog | null> {
     const [techResult, multResult, planResult] = await Promise.all([
       client.from("technicians").select("*").eq("active", true).order("id"),
       client.from("multipliers").select("*").eq("active", true).order("id"),
-      client.from("pricing_plans").select("*").eq("active", true).order("plan_id")
+      client.from("pricing_plans").select("*").eq("active", true).order("display_order", { ascending: true, nullsFirst: false })
     ]);
 
     const technicians: Technician[] = (techResult.data ?? []).map((row) => ({
@@ -34,7 +34,8 @@ export async function loadCatalogFromSupabase(): Promise<Catalog | null> {
       plan_name: String(row.plan_name ?? ""),
       group: String(row.group ?? ""),
       price: Number(row.price ?? 0),
-      active: true
+      active: true,
+      display_order: row.display_order ? Number(row.display_order) : undefined
     }));
 
     if (!technicians.length && !multipliers.length && !pricingPlans.length) {

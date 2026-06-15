@@ -78,13 +78,25 @@ export function sheetToPricingPlans(workbook: XLSX.WorkBook): PricingPlan[] {
   const sheet = workbook.Sheets["PricingPlans"];
   if (!sheet) return [];
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-  return rows.map((row) => ({
-    plan_id: String(row.plan_id || ""),
-    plan_name: String(row.plan_name || ""),
-    group: String(row.group || ""),
-    price: toNumber(row.price, 0),
-    active: toBoolean(row.active)
-  }));
+  return rows.map((row) => {
+    const plan_id = String(row.plan_id || "");
+    const raw_plan_name = String(row.plan_name || "");
+    let plan_name = raw_plan_name;
+    
+    // Remap old names to new standard names
+    if (plan_id === "high-profit") plan_name = "กลุ่มที่ 1 (กำไรสูง)";
+    if (plan_id === "medium-profit") plan_name = "กลุ่มที่ 2 (กำไรปานกลาง)";
+    if (plan_id === "flat-rate") plan_name = "กลุ่มที่ 3 (ราคาเท่ากัน)";
+
+    return {
+      plan_id,
+      plan_name,
+      group: String(row.group || ""),
+      price: toNumber(row.price, 0),
+      active: toBoolean(row.active),
+      display_order: row.display_order ? Number(row.display_order) : undefined
+    };
+  });
 }
 
 export function catalogToWorkbook(catalog: Catalog) {
@@ -117,7 +129,8 @@ export function catalogToWorkbook(catalog: Catalog) {
         plan_name: item.plan_name,
         group: item.group,
         price: item.price,
-        active: item.active ? "true" : "false"
+        active: item.active ? "true" : "false",
+        display_order: item.display_order
       }))
     );
     XLSX.utils.book_append_sheet(workbook, pricingPlansSheet, "PricingPlans");

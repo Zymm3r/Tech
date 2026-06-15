@@ -20,6 +20,7 @@ export type PricingPlan = {
   group: string;
   price: number;
   active: boolean;
+  display_order?: number;
 };
 
 export type Catalog = {

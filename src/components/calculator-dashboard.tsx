@@ -26,7 +26,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsModal } from "@/components/settings-modal";
 import { DEFAULT_CATALOG } from "@/lib/default-data";
 import { APP_VERSION } from "@/lib/constants";
-import { calculateBasePrice, calculateMultiplier, calculateFinalPrice, resolveTechnicianPrice } from "@/lib/pricing-engine";
+import { calculateBasePrice, calculateMultiplier, calculateFinalPrice, resolveTechnicianPrice, sortPricingPlans } from "@/lib/pricing-engine";
 import { exportCurrentConfiguration, exportPdf, exportProjectXlsx, importProjectXlsx } from "@/components/export-utils";
 import { Catalog, Multiplier, ProjectConfig, Technician } from "@/types";
 import { formatNumber, formatTHB, formatTimestamp } from "@/lib/utils";
@@ -78,9 +78,12 @@ export function CalculatorDashboard() {
   const multipliers = catalog.multipliers.filter((item) => item.active);
 
   const pricingPlans = useMemo(() => catalog.pricingPlans ?? DEFAULT_CATALOG.pricingPlans ?? [], [catalog.pricingPlans]);
-  const uniquePlans = useMemo(() => Array.from(new Set(pricingPlans.map(p => p.plan_id))).map(id => pricingPlans.find(p => p.plan_id === id)!), [pricingPlans]);
+  const uniquePlans = useMemo(() => {
+    const plans = Array.from(new Set(pricingPlans.map(p => p.plan_id))).map(id => pricingPlans.find(p => p.plan_id === id)!);
+    return sortPricingPlans(plans);
+  }, [pricingPlans]);
   const selectedPricingPlanId = store.projectConfig.selectedPricingPlan || "high-profit";
-  const selectedPricingPlanName = uniquePlans.find(p => p.plan_id === selectedPricingPlanId)?.plan_name || "กำไรสูง";
+  const selectedPricingPlanName = uniquePlans.find(p => p.plan_id === selectedPricingPlanId)?.plan_name || selectedPricingPlanId;
 
   const selectedTechnicians = useMemo(
     () => technicians.filter((item) => store.projectConfig.selectedTechnicianIds.includes(item.id)),
