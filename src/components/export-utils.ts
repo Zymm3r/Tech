@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { Catalog, ProjectConfig } from "@/types";
 import { calculateBasePrice, calculateMultiplier, calculateFinalPrice, resolveTechnicianPrice } from "@/lib/pricing-engine";
 import { formatTHB } from "@/lib/utils";
+import { NotoSansThaiBase64 } from "@/lib/fonts";
 
 type ResultContext = {
   catalog: Catalog;
@@ -89,8 +90,8 @@ export function exportProjectXlsx(context: ResultContext) {
   const multSheet = XLSX.utils.json_to_sheet(
     selectedMultipliers.map(m => ({
       category: m.category,
-      name: m.name,
-      multiplier: m.multiplier
+      multiplier_name: m.name,
+      multiplier_value: m.multiplier
     }))
   );
 
@@ -138,7 +139,7 @@ export function importProjectXlsx(arrayBuffer: ArrayBuffer): Partial<ProjectConf
     // Read ตัวคูณ sheet
     const multSheet = workbook.Sheets["ตัวคูณ"];
     const multRows = multSheet ? XLSX.utils.sheet_to_json<Record<string, unknown>>(multSheet, { defval: "" }) : [];
-    const selectedMultiplierIds = multRows.map(r => String(r.name || "")).filter(Boolean);
+    const selectedMultiplierIds = multRows.map(r => String(r.multiplier_name || r.name || "")).filter(Boolean);
 
     // Read สูตรคำนวณ sheet for plan
     const formulaSheet = workbook.Sheets["สูตรคำนวณ"];
@@ -174,19 +175,9 @@ export async function exportPdf(context: ResultContext) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
   try {
-    const fontRes = await fetch("/fonts/NotoSansThai-Regular.ttf");
-    if (fontRes.ok) {
-      const buffer = await fontRes.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64Font = window.btoa(binary);
-      doc.addFileToVFS("NotoSansThai.ttf", base64Font);
-      doc.addFont("NotoSansThai.ttf", "NotoSansThai", "normal");
-      doc.setFont("NotoSansThai");
-    }
+    doc.addFileToVFS("NotoSansThai.ttf", NotoSansThaiBase64);
+    doc.addFont("NotoSansThai.ttf", "NotoSansThai", "normal");
+    doc.setFont("NotoSansThai");
   } catch (err) {
     console.error("Failed to load Thai font:", err);
   }
