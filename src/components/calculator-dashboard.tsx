@@ -440,8 +440,8 @@ export function CalculatorDashboard() {
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">ระบบการจัดเก็บ</p>
-              <p className="mt-3 text-lg font-semibold">เครื่องนี้ + Supabase</p>
-              <p className="text-sm text-muted-foreground">ข้อมูลช่าง/ราคามาจาก Supabase</p>
+              <p className="mt-3 text-lg font-semibold"> Supabase DB </p>
+              <p className="text-sm text-muted-foreground">ข้อมูลช่าง/ราคามาจาก Supabase DB</p>
             </div>
           </div>
         </header>
