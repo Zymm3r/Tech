@@ -396,14 +396,6 @@ export function CalculatorDashboard() {
                 <FolderOpen className="h-4 w-4" />
                 เปิดไฟล์ Excel
               </Button>
-              <Button variant="outline" onClick={handleExportXlsx}>
-                <FileSpreadsheet className="h-4 w-4" />
-                ดาวน์โหลด Excel
-              </Button>
-              <Button onClick={handleExportPdf}>
-                <Download className="h-4 w-4" />
-                ดาวน์โหลด PDF
-              </Button>
             </div>
           </div>
 
@@ -521,12 +513,12 @@ export function CalculatorDashboard() {
           </div>
 
           {/* Column 2: Multipliers */}
-          <Card>
+          <Card className="flex h-full flex-col">
             <CardHeader className="border-b border-border/70 bg-background/50">
               <CardTitle>ตัวคูณ</CardTitle>
               <CardDescription>เลือกความเสี่ยงที่เกี่ยวข้อง (สามารถเลือกซ้อนกันได้)</CardDescription>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="flex-1 p-6">
               <div className="space-y-6">
                 {Object.entries(multiplierGroups).map(([category, items]) => (
                   <section key={category} className="space-y-3">
@@ -659,6 +651,14 @@ export function CalculatorDashboard() {
                 <Button variant="outline" onClick={handleReloadCatalog} className="col-span-2">
                   <RefreshCcw className="h-4 w-4" />
                   โหลดข้อมูลจาก Supabase ใหม่
+                </Button>
+                <Button variant="outline" onClick={handleExportXlsx}>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  ดาวน์โหลด Excel
+                </Button>
+                <Button onClick={handleExportPdf}>
+                  <Download className="h-4 w-4" />
+                  ดาวน์โหลด PDF
                 </Button>
               </div>
 
