@@ -208,8 +208,8 @@ export async function exportPdf(context: ResultContext) {
       ...selectedTechnicians.map((item) => ["ช่าง", item.name, item.group, formatTHB(resolveTechnicianPrice(item, planId, catalog.pricingPlans, item.basePrice)), "-"]),
       ...selectedMultipliers.map((item) => ["ตัวคูณ", item.name, item.category, "-", item.multiplier.toFixed(2)])
     ],
-    styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
-    headStyles: { fillColor: [15, 23, 42] }
+    styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai", fontStyle: "normal" },
+    headStyles: { fillColor: [15, 23, 42], fontStyle: "normal" }
   });
 
   const summaryY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 220;
