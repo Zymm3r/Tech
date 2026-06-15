@@ -1,4 +1,4 @@
-# Technician Pricing Dashboard
+ # Technician Pricing Dashboard
 
 Single-page Next.js 15 dashboard for technician pricing, risk multipliers, and quotation export.
 

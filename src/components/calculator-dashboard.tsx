@@ -356,7 +356,7 @@ export function CalculatorDashboard() {
               </Button>
             </div>
           </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Project Name</p>
               <Input
@@ -373,6 +373,15 @@ export function CalculatorDashboard() {
                 onChange={(event) => handleProjectField("customerName", event.target.value)}
                 placeholder="Customer name"
                 className="mt-2"
+              />
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/70 p-4 md:col-span-2 xl:col-span-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Notes</p>
+              <Textarea
+                value={store.projectConfig.notes}
+                onChange={(event) => handleProjectField("notes", event.target.value)}
+                placeholder="Quotation notes for the PDF"
+                className="mt-2 min-h-[88px] resize-none"
               />
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">

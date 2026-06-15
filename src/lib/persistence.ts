@@ -17,6 +17,31 @@ function canUseBrowserStorage() {
   return typeof window !== "undefined";
 }
 
+function readJson<T>(key: string, fallback: T) {
+  if (!canUseBrowserStorage()) return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+    return fallback;
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  if (!canUseBrowserStorage()) return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore quota or serialization failures so the app keeps working.
+  }
+}
+
 export function getSupabaseClient() {
   if (supabaseClient) return supabaseClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,36 +52,27 @@ export function getSupabaseClient() {
 }
 
 export function loadLocalProjectConfig(): ProjectConfig | null {
-  if (!canUseBrowserStorage()) return null;
-  const raw = window.localStorage.getItem(CONFIG_STORAGE_KEY);
-  return raw ? (JSON.parse(raw) as ProjectConfig) : null;
+  return readJson<ProjectConfig | null>(CONFIG_STORAGE_KEY, null);
 }
 
 export function saveLocalProjectConfig(config: ProjectConfig) {
-  if (!canUseBrowserStorage()) return;
-  window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+  writeJson(CONFIG_STORAGE_KEY, config);
 }
 
 export function loadLocalCatalog(): Catalog | null {
-  if (!canUseBrowserStorage()) return null;
-  const raw = window.localStorage.getItem(CATALOG_STORAGE_KEY);
-  return raw ? (JSON.parse(raw) as Catalog) : null;
+  return readJson<Catalog | null>(CATALOG_STORAGE_KEY, null);
 }
 
 export function saveLocalCatalog(catalog: Catalog) {
-  if (!canUseBrowserStorage()) return;
-  window.localStorage.setItem(CATALOG_STORAGE_KEY, JSON.stringify(catalog));
+  writeJson(CATALOG_STORAGE_KEY, catalog);
 }
 
 export function loadLocalHistory(): ProjectConfig[] {
-  if (!canUseBrowserStorage()) return [];
-  const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-  return raw ? (JSON.parse(raw) as ProjectConfig[]) : [];
+  return readJson<ProjectConfig[]>(HISTORY_STORAGE_KEY, []);
 }
 
 export function saveLocalHistory(history: ProjectConfig[]) {
-  if (!canUseBrowserStorage()) return;
-  window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(-20)));
+  writeJson(HISTORY_STORAGE_KEY, history.slice(-20));
 }
 
 export async function saveCloudConfig(projectConfig: ProjectConfig, catalog: Catalog | null) {
