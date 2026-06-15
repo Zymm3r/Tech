@@ -164,6 +164,20 @@ export function importProjectXlsx(arrayBuffer: ArrayBuffer): Partial<ProjectConf
   }
 }
 
+// ── PDF helpers ──────────────────────────────────────────────────────
+
+/** Safe number formatter for PDF – uses " บาท" instead of ฿ symbol which crashes jsPDF's Thai font renderer */
+function pdfFormatPrice(value: number): string {
+  return new Intl.NumberFormat("th-TH").format(value) + " บาท";
+}
+
+/** Plain number formatter (no currency) for PDF */
+function pdfFormatNum(value: number): string {
+  return new Intl.NumberFormat("th-TH").format(value);
+}
+
+// ── PDF Export ───────────────────────────────────────────────────────
+
 export async function exportPdf(context: ResultContext) {
   const { catalog, projectConfig } = context;
   const planId = projectConfig.selectedPricingPlan || "high-profit";
@@ -188,6 +202,7 @@ export async function exportPdf(context: ResultContext) {
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.width || 595.28;
+  const rightEdge = pageWidth - 40; // margin = 40
   const margin = 40;
 
   try {
@@ -221,23 +236,23 @@ export async function exportPdf(context: ResultContext) {
   doc.setTextColor(100, 116, 139);
   doc.text("บริษัท ซ่อมบำรุงและติดตั้ง จำกัด (ตัวอย่าง)", margin + 55, currentY + 32);
 
-  // Right side: Document Title & Meta
+  // Right side: Document Title & Meta – manually position X instead of { align: "right" }
   doc.setFontSize(22);
   doc.setTextColor(15, 23, 42);
-  doc.text("ใบเสนอราคา", pageWidth - margin, currentY + 18, { align: "right" });
+  doc.text("ใบเสนอราคา", rightEdge - 40, currentY + 18);
   doc.setFontSize(10);
-  doc.text("QUOTATION", pageWidth - margin, currentY + 32, { align: "right" });
+  doc.text("QUOTATION", rightEdge - 25, currentY + 32);
 
   currentY += 60;
 
-  // Document Details (Right)
+  // Document Details (Right) – manually position X
   doc.setFontSize(10);
   doc.setTextColor(15, 23, 42);
-  doc.text(`วันที่ (Date):`, pageWidth - 140, currentY);
-  doc.text(savedTimestamp, pageWidth - margin, currentY, { align: "right" });
+  doc.text(`วันที่ (Date):`, rightEdge - 100, currentY);
+  doc.text(savedTimestamp, rightEdge - 50, currentY);
   
-  doc.text(`แผนราคา (Plan):`, pageWidth - 140, currentY + 15);
-  doc.text(selectedPricingPlanName, pageWidth - margin, currentY + 15, { align: "right" });
+  doc.text(`แผนราคา (Plan):`, rightEdge - 100, currentY + 15);
+  doc.text(selectedPricingPlanName, rightEdge - 50, currentY + 15);
 
   // Customer Details (Left)
   doc.setFillColor(248, 250, 252);
@@ -246,7 +261,7 @@ export async function exportPdf(context: ResultContext) {
   doc.text("เสนอต่อ (Prepared For):", margin + 10, currentY);
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(12);
-  doc.text((projectConfig as any).customerName || "ลูกค้าทั่วไป", margin + 10, currentY + 18);
+  doc.text(String((projectConfig as any).customerName || "ลูกค้าทั่วไป"), margin + 10, currentY + 18);
   doc.setFontSize(10);
   doc.setTextColor(100, 116, 139);
   doc.text(`หมายเหตุ: ${(projectConfig as any).notes || "-"}`, margin + 10, currentY + 35);
@@ -270,7 +285,7 @@ export async function exportPdf(context: ResultContext) {
       String(index + 1),
       t.name,
       t.group,
-      formatTHB(resolveTechnicianPrice(t, planId, plans, t.basePrice))
+      pdfFormatPrice(resolveTechnicianPrice(t, planId, plans, t.basePrice))
     ]),
     styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
     headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42] },
@@ -279,12 +294,12 @@ export async function exportPdf(context: ResultContext) {
 
   currentY = (doc as any).lastAutoTable.finalY + 15;
 
-  // Subtotal for Technicians
+  // Subtotal for Technicians – manually position X
   doc.setFontSize(10);
   doc.setTextColor(15, 23, 42);
-  doc.text(`รวมค่าแรงช่าง (${selectedTechnicians.length} คน):`, pageWidth - 150, currentY, { align: "right" });
+  doc.text(`รวมค่าแรงช่าง (${selectedTechnicians.length} คน):`, rightEdge - 160, currentY);
   doc.setFontSize(11);
-  doc.text(formatTHB(basePrice), pageWidth - margin, currentY, { align: "right" });
+  doc.text(pdfFormatPrice(basePrice), rightEdge - 80, currentY);
   currentY += 30;
 
   if (currentY > 650) { doc.addPage(); currentY = margin; }
@@ -320,32 +335,35 @@ export async function exportPdf(context: ResultContext) {
   if (currentY > 600) { doc.addPage(); currentY = margin; }
 
   // ==========================================
-  // FINANCIAL SUMMARY BOX
+  // FINANCIAL SUMMARY BOX – manually position X
   // ==========================================
   currentY += 10;
   doc.setFillColor(248, 250, 252); // slate-50
   doc.setDrawColor(226, 232, 240); // slate-200
   doc.rect(pageWidth - 280, currentY, 240, 95, "FD");
 
+  const summaryLabelX = rightEdge - 130;
+  const summaryValueX = rightEdge - 50;
+
   doc.setFontSize(11);
   doc.setTextColor(100, 116, 139);
-  doc.text("ยอดรวมค่าแรง (Base Subtotal):", pageWidth - 130, currentY + 25, { align: "right" });
+  doc.text("ยอดรวมค่าแรง (Base Subtotal):", summaryLabelX, currentY + 25);
   doc.setTextColor(15, 23, 42);
-  doc.text(`${formatTHB(basePrice)}`, pageWidth - margin - 10, currentY + 25, { align: "right" });
+  doc.text(pdfFormatPrice(basePrice), summaryValueX, currentY + 25);
 
   doc.setTextColor(100, 116, 139);
-  doc.text("ตัวคูณรวม (Total Multipliers):", pageWidth - 130, currentY + 45, { align: "right" });
+  doc.text("ตัวคูณรวม (Total Multipliers):", summaryLabelX, currentY + 45);
   doc.setTextColor(15, 23, 42);
-  doc.text(`×${multiplierProduct.toFixed(2)}`, pageWidth - margin - 10, currentY + 45, { align: "right" });
+  doc.text(`×${multiplierProduct.toFixed(2)}`, summaryValueX, currentY + 45);
 
-  doc.line(pageWidth - 260, currentY + 55, pageWidth - margin - 10, currentY + 55);
+  doc.line(pageWidth - 260, currentY + 55, rightEdge - 10, currentY + 55);
 
   doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
-  doc.text("ราคารวมสุทธิ (Grand Total):", pageWidth - 130, currentY + 78, { align: "right" });
+  doc.text("ราคารวมสุทธิ (Grand Total):", summaryLabelX, currentY + 78);
   doc.setFontSize(16);
   doc.setTextColor(14, 165, 233);
-  doc.text(`${formatTHB(finalPrice)}`, pageWidth - margin - 10, currentY + 78, { align: "right" });
+  doc.text(pdfFormatPrice(finalPrice), summaryValueX, currentY + 78);
 
   currentY += 130;
 
@@ -361,16 +379,16 @@ export async function exportPdf(context: ResultContext) {
   doc.line(margin + 20, currentY + 40, margin + 170, currentY + 40);
   doc.setFontSize(10);
   doc.setTextColor(15, 23, 42);
-  doc.text("ผู้เสนอราคา (Prepared By)", margin + 95, currentY + 55, { align: "center" });
+  doc.text("ผู้เสนอราคา (Prepared By)", margin + 95, currentY + 55);
   doc.setTextColor(100, 116, 139);
-  doc.text("วันที่ (Date) _____/_____/_____", margin + 95, currentY + 70, { align: "center" });
+  doc.text("วันที่ (Date) _____/_____/_____", margin + 95, currentY + 70);
 
   // Accepted By (Right)
-  doc.line(pageWidth - margin - 170, currentY + 40, pageWidth - margin - 20, currentY + 40);
+  doc.line(rightEdge - 170, currentY + 40, rightEdge - 20, currentY + 40);
   doc.setTextColor(15, 23, 42);
-  doc.text("ผู้อนุมัติ/ลูกค้า (Accepted By)", pageWidth - margin - 95, currentY + 55, { align: "center" });
+  doc.text("ผู้อนุมัติ/ลูกค้า (Accepted By)", rightEdge - 95, currentY + 55);
   doc.setTextColor(100, 116, 139);
-  doc.text("วันที่ (Date) _____/_____/_____", pageWidth - margin - 95, currentY + 70, { align: "center" });
+  doc.text("วันที่ (Date) _____/_____/_____", rightEdge - 95, currentY + 70);
 
   // ==========================================
   // APPENDIX: CALCULATION BREAKDOWN
@@ -391,13 +409,13 @@ export async function exportPdf(context: ResultContext) {
   doc.setTextColor(15, 23, 42);
   selectedTechnicians.forEach((t) => {
     const p = resolveTechnicianPrice(t, planId, plans, t.basePrice);
-    doc.text(`${t.name} (${t.group}) = ${formatTHB(p)}`, margin + 15, currentY);
+    doc.text(`${t.name} (${t.group}) = ${pdfFormatPrice(p)}`, margin + 15, currentY);
     currentY += 15;
     if (currentY > 780) { doc.addPage(); currentY = margin; }
   });
   
   currentY += 5;
-  doc.text(`รวมค่าแรง = ${formatTHB(basePrice)}`, margin + 15, currentY);
+  doc.text(`รวมค่าแรง = ${pdfFormatPrice(basePrice)}`, margin + 15, currentY);
   currentY += 25;
 
   if (sortedMultipliers.length > 0) {
@@ -419,13 +437,13 @@ export async function exportPdf(context: ResultContext) {
   currentY += 15;
   
   doc.setTextColor(15, 23, 42);
-  const calculationSteps = [formatTHB(basePrice)];
+  const calculationSteps = [pdfFormatPrice(basePrice)];
   sortedMultipliers.forEach(m => calculationSteps.push(m.multiplier.toFixed(1)));
   doc.text(calculationSteps.join(" × "), margin + 15, currentY);
   
   currentY += 20;
   doc.setFontSize(11);
-  doc.text(`= ${formatTHB(finalPrice)}`, margin + 15, currentY);
+  doc.text(`= ${pdfFormatPrice(finalPrice)}`, margin + 15, currentY);
 
   // ==========================================
   // FOOTER (Applied to all pages)
@@ -443,7 +461,7 @@ export async function exportPdf(context: ResultContext) {
     
     doc.text(`Generated by Technician Pricing Dashboard v${appVersion}`, margin, footerY);
     doc.text(`Exported: ${exportTimestamp}`, margin, footerY + 12);
-    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, footerY + 12, { align: "right" });
+    doc.text(`Page ${i} of ${totalPages}`, rightEdge - 50, footerY + 12);
   }
 
   doc.save(`Quotation-${(projectConfig as any).customerName ? (projectConfig as any).customerName.replace(/\s+/g, '-') : 'Customer'}-${format(new Date(), "yyyyMMdd")}.pdf`);
