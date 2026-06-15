@@ -142,19 +142,17 @@ function exportProjectXlsx(context) {
     var finalPrice = Math.round((0, pricing_engine_1.calculateFinalPrice)(basePrice, multiplierProduct));
     // Sheet 1: สรุปงาน
     var summarySheet = XLSX.utils.json_to_sheet([{
-            project_name: projectConfig.projectName || "",
             customer_name: projectConfig.customerName || "",
-            pricing_plan: planId,
+            technicians_name: selectedTechnicians.map(function (t) { return t.name; }).join(", "),
             pricing_plan_name: planName,
+            technicians_group: selectedTechnicians.map(function (t) { return t.group; }).join(", "),
             base_price: basePrice,
+            multipliers_name: selectedMultipliers.map(function (m) { return m.name; }).join(", "),
+            multipliers_value: selectedMultipliers.map(function (m) { return m.multiplier.toFixed(1); }).join(", "),
+            Sum_multiplier: selectedMultipliers.reduce(function (sum, m) { return sum + m.multiplier; }, 0),
             final_price: finalPrice,
             notes: projectConfig.notes || "",
             created_at: new Date().toISOString(),
-            technicians_name: selectedTechnicians.map(function (t) { return t.name; }).join(", "),
-            technicians_group: selectedTechnicians.map(function (t) { return t.group; }).join(", "),
-            multipliers_name: selectedMultipliers.map(function (m) { return m.name; }).join(", "),
-            multipliers_value: selectedMultipliers.map(function (m) { return m.multiplier.toFixed(1); }).join(", "),
-            Sum_multiplier: selectedMultipliers.reduce(function (sum, m) { return sum + m.multiplier; }, 0)
         }]);
     // Sheet 2: ช่าง
     var techSheet = XLSX.utils.json_to_sheet(selectedTechnicians.map(function (t) { return ({
