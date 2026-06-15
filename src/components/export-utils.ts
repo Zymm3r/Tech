@@ -167,10 +167,17 @@ export async function exportPdf(context: ResultContext) {
 
   const selectedTechnicians = catalog.technicians.filter((item) => projectConfig.selectedTechnicianIds.includes(item.id));
   const selectedMultipliers = catalog.multipliers.filter((item) => projectConfig.selectedMultiplierIds.includes(item.id));
+  const sortedMultipliers = [...selectedMultipliers].sort((a, b) => (a.category || "").localeCompare(b.category || ""));
+
   const basePrice = calculateBasePrice(catalog.technicians, projectConfig.selectedTechnicianIds, planId, catalog.pricingPlans);
   const multiplierProduct = calculateMultiplier(catalog.multipliers, projectConfig.selectedMultiplierIds);
   const finalPrice = Math.round(calculateFinalPrice(basePrice, multiplierProduct));
-  const timestamp = new Date().toISOString();
+  
+  const savedDate = projectConfig.lastSavedAt ? new Date(projectConfig.lastSavedAt) : new Date();
+  const savedTimestamp = format(savedDate, "dd/MM/yyyy HH:mm:ss");
+  const exportTimestamp = format(new Date(), "dd/MM/yyyy HH:mm:ss");
+  const appVersion = (projectConfig as any).version || "1.0.0";
+  const formatNum = (num: number) => new Intl.NumberFormat("th-TH").format(num);
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
@@ -185,46 +192,200 @@ export async function exportPdf(context: ResultContext) {
     console.error("Failed to load Thai font:", err);
   }
 
+  // --- Header ---
   doc.setFillColor(14, 165, 233);
   doc.roundedRect(40, 36, 42, 42, 10, 10, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
   doc.text("TP", 52, 63);
+  
   doc.setTextColor(15, 23, 42);
-  doc.setFontSize(18);
-  doc.text("ใบเสนอราคา (Quotation)", 96, 58);
+  doc.setFontSize(22);
+  doc.text("ใบเสนอราคา", 96, 58);
+  
   doc.setFontSize(10);
   doc.setTextColor(100, 116, 139);
-  doc.text(`ออกเมื่อ ${timestamp}`, 96, 74);
+  doc.text(`ออกเมื่อ: ${savedTimestamp}`, 96, 74);
 
-  doc.setFontSize(13);
+  doc.setFontSize(11);
   doc.setTextColor(15, 23, 42);
   doc.text(`ชื่อโครงการ: ${projectConfig.projectName || "-"}`, 40, 112);
-  doc.text(`ชื่อลูกค้า: ${projectConfig.customerName || "-"}`, 40, 130);
-  doc.text(`แผนราคา: ${selectedPricingPlanName}`, 40, 148);
-  doc.text(`หมายเหตุ: ${projectConfig.notes || "-"}`, 40, 166);
+  doc.text(`ชื่อลูกค้า: ${projectConfig.customerName || "-"}`, 40, 128);
+  doc.text(`แผนราคา: ${selectedPricingPlanName}`, 40, 144);
+  doc.text(`หมายเหตุ: ${projectConfig.notes || "-"}`, 40, 160);
+
+  // --- Section 1: รายการช่าง ---
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text("รายการช่าง", 40, 195);
 
   autoTable(doc, {
-    startY: 188,
-    head: [["ประเภท", "ชื่อ", "กลุ่ม / หมวดหมู่", "ราคา", "ตัวคูณ"]],
-    body: [
-      ...selectedTechnicians.map((item) => ["ช่าง", item.name, item.group, formatTHB(resolveTechnicianPrice(item, planId, catalog.pricingPlans, item.basePrice)), "-"]),
-      ...selectedMultipliers.map((item) => ["ตัวคูณ", item.name, item.category, "-", item.multiplier.toFixed(2)])
-    ],
+    startY: 205,
+    head: [["ลำดับ", "ชื่อช่าง", "กลุ่ม", "ราคาที่ใช้คำนวณ"]],
+    body: selectedTechnicians.map((t, index) => [
+      String(index + 1),
+      t.name,
+      t.group,
+      formatNum(resolveTechnicianPrice(t, planId, catalog.pricingPlans, t.basePrice))
+    ]),
     styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
     headStyles: { fillColor: [15, 23, 42] }
   });
 
-  const summaryY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 220;
-  doc.setFontSize(12);
-  doc.text(`ราคาเริ่มต้น: ${formatTHB(basePrice)}`, 40, summaryY + 28);
-  doc.text(`ตัวคูณที่ใช้: × ${multiplierProduct.toFixed(2)}`, 40, summaryY + 48);
-  doc.setFontSize(18);
-  doc.text(`ราคารวม: ${formatTHB(finalPrice)}`, 40, summaryY + 76);
-  doc.setFontSize(9);
+  let currentY = (doc as any).lastAutoTable.finalY + 15;
+
+  // --- Section 2: สรุปราคาแรง ---
+  doc.setFontSize(10);
   doc.setTextColor(100, 116, 139);
-  doc.text(`จำนวนช่าง: ${selectedTechnicians.length}`, 40, summaryY + 104);
-  doc.text(`จำนวนตัวคูณ: ${selectedMultipliers.length}`, 180, summaryY + 104);
+  doc.text(`จำนวนช่าง: ${selectedTechnicians.length} คน`, 40, currentY);
+  currentY += 15;
+  doc.setFontSize(12);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`ราคารวมก่อนตัวคูณ: ${formatTHB(basePrice)}`, 40, currentY);
+  
+  currentY += 35;
+
+  // Check page break for Multipliers table
+  if (currentY > 650) {
+    doc.addPage();
+    currentY = 40;
+  }
+
+  // --- Section 3: ตัวคูณที่เลือก ---
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text("ตัวคูณที่เลือก", 40, currentY);
+
+  if (sortedMultipliers.length > 0) {
+    autoTable(doc, {
+      startY: currentY + 10,
+      head: [["ลำดับ", "หมวดหมู่", "รายการ", "ค่า"]],
+      body: sortedMultipliers.map((m, index) => [
+        String(index + 1),
+        m.category,
+        m.name,
+        `×${m.multiplier.toFixed(2)}`
+      ]),
+      styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
+      headStyles: { fillColor: [15, 23, 42] }
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 30;
+  } else {
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text("- ไม่มีตัวคูณที่เลือก -", 40, currentY + 20);
+    currentY += 45;
+  }
+
+  // Check page break for Formula
+  if (currentY > 600) {
+    doc.addPage();
+    currentY = 40;
+  }
+
+  // --- Section 4: สูตรคำนวณ ---
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text("สูตรคำนวณ", 40, currentY);
+  currentY += 20;
+
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139);
+  doc.text("รายการช่าง:", 40, currentY);
+  currentY += 15;
+  
+  doc.setTextColor(15, 23, 42);
+  selectedTechnicians.forEach((t) => {
+    const p = resolveTechnicianPrice(t, planId, catalog.pricingPlans, t.basePrice);
+    doc.text(`${t.name} (${t.group}) = ${formatNum(p)}`, 50, currentY);
+    currentY += 15;
+    
+    // Page break protection within loop
+    if (currentY > 750) {
+      doc.addPage();
+      currentY = 40;
+    }
+  });
+  
+  currentY += 5;
+  doc.setFontSize(11);
+  doc.text(`รวมค่าแรง = ${formatNum(basePrice)}`, 40, currentY);
+  currentY += 25;
+
+  if (sortedMultipliers.length > 0) {
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text("ตัวคูณ:", 40, currentY);
+    currentY += 15;
+    
+    doc.setTextColor(15, 23, 42);
+    sortedMultipliers.forEach((m) => {
+      doc.text(`${m.name} = ×${m.multiplier.toFixed(2)}`, 50, currentY);
+      currentY += 15;
+      if (currentY > 750) {
+        doc.addPage();
+        currentY = 40;
+      }
+    });
+    
+    currentY += 10;
+  }
+
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139);
+  doc.text("คำนวณ:", 40, currentY);
+  currentY += 15;
+  
+  doc.setTextColor(15, 23, 42);
+  const calculationSteps = [formatNum(basePrice)];
+  sortedMultipliers.forEach(m => calculationSteps.push(m.multiplier.toFixed(2)));
+  doc.text(calculationSteps.join(" × "), 50, currentY);
+  
+  currentY += 20;
+  doc.setFontSize(12);
+  doc.text(`= ${formatTHB(finalPrice)}`, 50, currentY);
+  currentY += 30;
+
+  // Check page break for Summary Box
+  if (currentY > 680) {
+    doc.addPage();
+    currentY = 40;
+  }
+
+  // --- Section 5: สรุปสุดท้าย (Highlighted Box) ---
+  doc.setFillColor(241, 245, 249); // slate-100
+  doc.roundedRect(40, currentY, 515, 100, 8, 8, "F");
+  
+  doc.setFontSize(12);
+  doc.setTextColor(100, 116, 139);
+  doc.text("ค่าแรงรวม", 60, currentY + 30);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`${formatTHB(basePrice)}`, 530, currentY + 30, { align: "right" });
+  
+  doc.setTextColor(100, 116, 139);
+  doc.text("ตัวคูณรวม", 60, currentY + 50);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`×${multiplierProduct.toFixed(2)}`, 530, currentY + 50, { align: "right" });
+  
+  doc.setFontSize(16);
+  doc.text("ราคารวมสุทธิ", 60, currentY + 80);
+  doc.setFontSize(18);
+  doc.setTextColor(14, 165, 233);
+  doc.text(`${formatTHB(finalPrice)}`, 530, currentY + 80, { align: "right" });
+
+  currentY += 130;
+
+  // --- Footer ---
+  // Position at bottom of the page
+  doc.setFontSize(9);
+  doc.setTextColor(148, 163, 184); // slate-400
+  const pageHeight = doc.internal.pageSize.height || 842;
+  const footerY = pageHeight - 40;
+  
+  doc.text(`สร้างโดย Technician Pricing Dashboard v${appVersion}`, 40, footerY);
+  doc.text(`วันที่ส่งออก PDF: ${exportTimestamp}`, 40, footerY + 15);
+  
+  doc.text(`จำนวนช่างทั้งหมด: ${selectedTechnicians.length} | จำนวนตัวคูณทั้งหมด: ${sortedMultipliers.length} | แผนราคาที่ใช้: ${selectedPricingPlanName}`, 555, footerY + 15, { align: "right" });
 
   doc.save(`technician-pricing-result-${format(new Date(), "yyyyMMdd-HHmmss")}.pdf`);
 }

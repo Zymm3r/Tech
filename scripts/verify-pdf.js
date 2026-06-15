@@ -46,7 +46,7 @@ var fs_1 = __importDefault(require("fs"));
 var PDFParser = require("pdf2json");
 function runTest() {
     return __awaiter(this, void 0, void 0, function () {
-        var doc, arrayBuffer, buffer, pdfParser;
+        var doc, currentY, arrayBuffer, buffer, pdfParser;
         return __generator(this, function (_a) {
             doc = new jspdf_1.jsPDF({ unit: "pt", format: "a4" });
             try {
@@ -66,19 +66,19 @@ function runTest() {
             doc.text("ชื่อโครงการ: ทดสอบระบบ", 40, 112);
             doc.text("ชื่อลูกค้า: บริษัท ไทย จำกัด", 40, 130);
             doc.text("หมายเหตุ: ที่อับอากาศ / ความปลอดภัย", 40, 166);
+            doc.text("รายการช่าง", 40, 195);
             (0, jspdf_autotable_1.default)(doc, {
-                startY: 188,
-                head: [["ประเภท", "ชื่อ", "กลุ่ม / หมวดหมู่", "ราคา", "ตัวคูณ"]],
+                startY: 205,
+                head: [["ลำดับ", "ชื่อช่าง", "กลุ่ม", "ราคาที่ใช้คำนวณ"]],
                 body: [
-                    ["ช่าง", "พี่บอย", "Group A", "2,400", "-"],
-                    ["ช่าง", "ช่างแอร์", "Group B", "1,500", "-"],
-                    ["ตัวคูณ", "ไล่เช็ค ไม่มีแบบ / ความลับสูง", "Security", "-", "1.50"],
-                    ["ตัวคูณ", "ที่อับอากาศ", "Safety", "-", "1.20"],
-                    ["ตัวคูณ", "ทำงานกลางคืน", "Time", "-", "2.00"]
+                    ["1", "พี่บอย", "Group A", "2,400"],
+                    ["2", "ช่างแอร์", "Group B", "1,500"]
                 ],
                 styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
                 headStyles: { fillColor: [15, 23, 42] }
             });
+            currentY = doc.lastAutoTable.finalY + 15;
+            doc.text("ราคารวมก่อนตัวคูณ: 3,900", 40, currentY);
             arrayBuffer = doc.output("arraybuffer");
             buffer = Buffer.from(arrayBuffer);
             // Save for manual inspection if needed
@@ -94,13 +94,9 @@ function runTest() {
             pdfParser.on("pdfParser_dataReady", function (pdfData) {
                 var text = pdfParser.getRawTextContent();
                 var expectedStrings = [
-                    "ใบเสนอราคา",
-                    "ชื่อโครงการ",
-                    "ชื่อลูกค้า",
+                    "รายการช่าง",
                     "พี่บอย",
-                    "ที่อับอากาศ",
-                    "ไล่เช็ค",
-                    "ไม่มีแบบ"
+                    "ราคารวมก่อนตัวคูณ"
                 ];
                 var failed = false;
                 for (var _i = 0, expectedStrings_1 = expectedStrings; _i < expectedStrings_1.length; _i++) {

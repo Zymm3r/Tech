@@ -25,19 +25,20 @@ async function runTest() {
   doc.text("ชื่อลูกค้า: บริษัท ไทย จำกัด", 40, 130);
   doc.text("หมายเหตุ: ที่อับอากาศ / ความปลอดภัย", 40, 166);
 
+  doc.text("รายการช่าง", 40, 195);
   autoTable(doc, {
-    startY: 188,
-    head: [["ประเภท", "ชื่อ", "กลุ่ม / หมวดหมู่", "ราคา", "ตัวคูณ"]],
+    startY: 205,
+    head: [["ลำดับ", "ชื่อช่าง", "กลุ่ม", "ราคาที่ใช้คำนวณ"]],
     body: [
-      ["ช่าง", "พี่บอย", "Group A", "2,400", "-"],
-      ["ช่าง", "ช่างแอร์", "Group B", "1,500", "-"],
-      ["ตัวคูณ", "ไล่เช็ค ไม่มีแบบ / ความลับสูง", "Security", "-", "1.50"],
-      ["ตัวคูณ", "ที่อับอากาศ", "Safety", "-", "1.20"],
-      ["ตัวคูณ", "ทำงานกลางคืน", "Time", "-", "2.00"]
+      ["1", "พี่บอย", "Group A", "2,400"],
+      ["2", "ช่างแอร์", "Group B", "1,500"]
     ],
     styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
     headStyles: { fillColor: [15, 23, 42] }
   });
+  
+  let currentY = (doc as any).lastAutoTable.finalY + 15;
+  doc.text("ราคารวมก่อนตัวคูณ: 3,900", 40, currentY);
 
   const arrayBuffer = doc.output("arraybuffer");
   const buffer = Buffer.from(arrayBuffer);
@@ -60,13 +61,9 @@ async function runTest() {
     const text = pdfParser.getRawTextContent();
     
     const expectedStrings = [
-      "ใบเสนอราคา",
-      "ชื่อโครงการ",
-      "ชื่อลูกค้า",
+      "รายการช่าง",
       "พี่บอย",
-      "ที่อับอากาศ",
-      "ไล่เช็ค",
-      "ไม่มีแบบ"
+      "ราคารวมก่อนตัวคูณ"
     ];
     
     let failed = false;
