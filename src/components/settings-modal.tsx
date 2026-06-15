@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useDashboardStore } from "@/store/use-dashboard-store";
 import { Catalog } from "@/types";
-import { saveLocalCatalog } from "@/lib/persistence";
+import { getSupabaseClient } from "@/lib/persistence";
+import { loadCatalogFromSupabase } from "@/lib/supabase-catalog";
+import { useState } from "react";
 
 type FormValues = {
   technicians: Catalog["technicians"];
@@ -25,6 +27,8 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
     ...(catalog?.technicians?.map(t => t.group) || []),
     "Group A", "Group B", "Group C"
   ])).filter(Boolean);
+
+  const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm<FormValues>({
     defaultValues: {
@@ -43,23 +47,48 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
     });
   }, [catalog, form]);
 
-  function onSubmit(values: FormValues) {
-    const nextCatalog: Catalog = {
-      ...catalog,
-      technicians: values.technicians.map((item) => ({
-        ...item,
-        basePrice: Number(item.basePrice),
-        active: Boolean(item.active)
-      })),
-      multipliers: values.multipliers.map((item) => ({
-        ...item,
-        multiplier: Number(item.multiplier),
-        active: Boolean(item.active)
-      }))
-    };
-    setCatalog(nextCatalog, false);
-    saveLocalCatalog(nextCatalog);
-    onOpenChange(false);
+  async function onSubmit(values: FormValues) {
+    const client = getSupabaseClient();
+    if (!client) {
+      alert("ไม่สามารถเชื่อมต่อฐานข้อมูลได้");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const techPayload = values.technicians.map((t) => ({
+        id: t.id,
+        name: t.name,
+        group: t.group,
+        base_price: Number(t.basePrice),
+        active: Boolean(t.active)
+      }));
+      
+      const { error: techError } = await client.from("technicians").upsert(techPayload, { onConflict: "id" });
+      if (techError) throw techError;
+
+      const multPayload = values.multipliers.map((m) => ({
+        id: m.id,
+        category: m.category,
+        name: m.name,
+        multiplier: Number(m.multiplier),
+        active: Boolean(m.active)
+      }));
+
+      const { error: multError } = await client.from("multipliers").upsert(multPayload, { onConflict: "id" });
+      if (multError) throw multError;
+
+      const refreshedCatalog = await loadCatalogFromSupabase();
+      if (!refreshedCatalog) throw new Error("โหลดข้อมูลหลังจากบันทึกไม่สำเร็จ");
+
+      setCatalog(refreshedCatalog, false);
+      onOpenChange(false);
+    } catch (err: any) {
+      console.error(err);
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + (err.message || "Unknown error"));
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -134,10 +163,12 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
           </section>
 
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => form.reset()}>
+            <Button type="button" variant="outline" onClick={() => form.reset()} disabled={isSaving}>
               เริ่มใหม่
             </Button>
-            <Button type="submit">บันทึกการตั้งค่า</Button>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? "กำลังบันทึก..." : "บันทึกการตั้งค่า"}
+            </Button>
           </div>
         </form>
       </DialogContent>
