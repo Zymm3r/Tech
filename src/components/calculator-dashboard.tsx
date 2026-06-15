@@ -648,10 +648,6 @@ export function CalculatorDashboard() {
                   <Save className="h-4 w-4" />
                   บันทึก
                 </Button>
-                <Button variant="outline" onClick={handleReloadCatalog} className="col-span-2">
-                  <RefreshCcw className="h-4 w-4" />
-                  โหลดข้อมูลจาก Supabase ใหม่
-                </Button>
                 <Button variant="outline" onClick={handleExportXlsx}>
                   <FileSpreadsheet className="h-4 w-4" />
                   ดาวน์โหลด Excel
