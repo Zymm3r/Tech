@@ -177,7 +177,10 @@ export async function exportPdf(context: ResultContext) {
   try {
     doc.addFileToVFS("NotoSansThai.ttf", NotoSansThaiBase64);
     doc.addFont("NotoSansThai.ttf", "NotoSansThai", "normal");
-    doc.setFont("NotoSansThai");
+    doc.addFont("NotoSansThai.ttf", "NotoSansThai", "bold");
+    doc.addFont("NotoSansThai.ttf", "NotoSansThai", "italic");
+    doc.addFont("NotoSansThai.ttf", "NotoSansThai", "bolditalic");
+    doc.setFont("NotoSansThai", "normal");
   } catch (err) {
     console.error("Failed to load Thai font:", err);
   }
@@ -208,8 +211,8 @@ export async function exportPdf(context: ResultContext) {
       ...selectedTechnicians.map((item) => ["ช่าง", item.name, item.group, formatTHB(resolveTechnicianPrice(item, planId, catalog.pricingPlans, item.basePrice)), "-"]),
       ...selectedMultipliers.map((item) => ["ตัวคูณ", item.name, item.category, "-", item.multiplier.toFixed(2)])
     ],
-    styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai", fontStyle: "normal" },
-    headStyles: { fillColor: [15, 23, 42], fontStyle: "normal" }
+    styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
+    headStyles: { fillColor: [15, 23, 42] }
   });
 
   const summaryY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 220;
