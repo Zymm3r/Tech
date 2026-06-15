@@ -66,19 +66,17 @@ export function exportProjectXlsx(context: ResultContext) {
 
   // Sheet 1: สรุปงาน
   const summarySheet = XLSX.utils.json_to_sheet([{
-    project_name: projectConfig.projectName || "",
     customer_name: projectConfig.customerName || "",
-    pricing_plan: planId,
-    pricing_plan_name: planName,
-    base_price: basePrice,
-    final_price: finalPrice,
-    notes: projectConfig.notes || "",
-    created_at: new Date().toISOString(),
     technicians_name: selectedTechnicians.map(t => t.name).join(", "),
+    pricing_plan_name: planName,
     technicians_group: selectedTechnicians.map(t => t.group).join(", "),
+    base_price: basePrice,
     multipliers_name: selectedMultipliers.map(m => m.name).join(", "),
     multipliers_value: selectedMultipliers.map(m => m.multiplier.toFixed(1)).join(", "),
-    Sum_multiplier: selectedMultipliers.reduce((sum, m) => sum + m.multiplier, 0)
+    Sum_multiplier: selectedMultipliers.reduce((sum, m) => sum + m.multiplier, 0),
+    final_price: finalPrice,
+    notes: projectConfig.notes || "",
+    created_at: new Date().toISOString()
   }]);
 
   // Sheet 2: ช่าง
