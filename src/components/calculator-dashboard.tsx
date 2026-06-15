@@ -5,17 +5,14 @@ import { format } from "date-fns";
 import {
   AlertTriangle,
   Download,
-  History,
   Import,
-  Loader2,
-  MoonStar,
   RefreshCcw,
   Settings2,
   Save,
-  Shield,
   FileJson2,
   FileDown,
-  Files,
+  FileSpreadsheet,
+  FolderOpen,
   Undo2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,27 +20,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsModal } from "@/components/settings-modal";
 import { DEFAULT_CATALOG } from "@/lib/default-data";
 import { APP_VERSION } from "@/lib/constants";
 import { calculateBasePrice, calculateMultiplier, calculateFinalPrice, resolveTechnicianPrice } from "@/lib/pricing-engine";
-import { exportCurrentConfiguration, exportPdf, downloadWorkbook } from "@/components/export-utils";
+import { exportCurrentConfiguration, exportPdf, exportProjectXlsx, importProjectXlsx } from "@/components/export-utils";
 import { Catalog, Multiplier, ProjectConfig, Technician } from "@/types";
 import { formatNumber, formatTHB, formatTimestamp } from "@/lib/utils";
 import { useDashboardStore } from "@/store/use-dashboard-store";
-import { createTemplateWorkbook, catalogFromWorkbook, readWorkbookFromUrl } from "@/lib/spreadsheet";
 import { loadCloudConfig, loadLocalCatalog, loadLocalHistory, loadLocalProjectConfig, saveCloudConfig, saveLocalCatalog, saveLocalHistory, saveLocalProjectConfig } from "@/lib/persistence";
-import * as XLSX from "xlsx";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { loadCatalogFromSupabase } from "@/lib/supabase-catalog";
 import { cn } from "@/lib/utils";
-import { downloadJson } from "@/components/export-utils";
 
-type LoadedSource = "default" | "local" | "spreadsheet" | "cloud";
+type LoadedSource = "default" | "local" | "cloud" | "Supabase DB";
 
 function groupTechnicians(technicians: Technician[]) {
   return technicians.reduce<Record<string, Technician[]>>((acc, item) => {
@@ -78,14 +70,15 @@ export function CalculatorDashboard() {
   const [source, setSource] = useState<LoadedSource>("default");
   const [importError, setImportError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<string>("ว่าง");
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const jsonInputRef = useRef<HTMLInputElement | null>(null);
+  const xlsxInputRef = useRef<HTMLInputElement | null>(null);
 
   const catalog = store.catalog ?? DEFAULT_CATALOG;
   const technicians = catalog.technicians.filter((item) => item.active);
   const multipliers = catalog.multipliers.filter((item) => item.active);
-  
+
   const pricingPlans = useMemo(() => catalog.pricingPlans ?? DEFAULT_CATALOG.pricingPlans ?? [], [catalog.pricingPlans]);
-  const uniquePlans = Array.from(new Set(pricingPlans.map(p => p.plan_id))).map(id => pricingPlans.find(p => p.plan_id === id)!);
+  const uniquePlans = useMemo(() => Array.from(new Set(pricingPlans.map(p => p.plan_id))).map(id => pricingPlans.find(p => p.plan_id === id)!), [pricingPlans]);
   const selectedPricingPlanId = store.projectConfig.selectedPricingPlan || "high-profit";
   const selectedPricingPlanName = uniquePlans.find(p => p.plan_id === selectedPricingPlanId)?.plan_name || "กำไรสูง";
 
@@ -111,6 +104,8 @@ export function CalculatorDashboard() {
     }
     return `(${baseExpression}) × ${multiplierExpression} = ${formatNumber(finalPrice)}`;
   }, [basePrice, finalPrice, selectedMultipliers, selectedTechnicians, selectedPricingPlanId, pricingPlans]);
+
+  // ── Hydration ──────────────────────────────────────────────────────
 
   useEffect(() => {
     let mounted = true;
@@ -139,21 +134,13 @@ export function CalculatorDashboard() {
           setSource("cloud");
         }
 
-        try {
-          const [technicianBook, multiplierBook, pricingPlanBook] = await Promise.all([
-            readWorkbookFromUrl("/data/technicians.xlsx").catch(() => null),
-            readWorkbookFromUrl("/data/multipliers.xlsx").catch(() => null),
-            readWorkbookFromUrl("/data/pricing_plans.xlsx").catch(() => null)
-          ]);
-          const spreadsheetCatalog = catalogFromWorkbook(technicianBook, multiplierBook, pricingPlanBook);
-          if (spreadsheetCatalog) {
-            useDashboardStore.getState().setCatalog(spreadsheetCatalog, true);
-            setSource("spreadsheet");
-          }
-        } catch {
-          if (!useDashboardStore.getState().catalog) {
-            useDashboardStore.getState().setCatalog(DEFAULT_CATALOG, false);
-          }
+        // Load catalog from Supabase DB (source of truth)
+        const supabaseCatalog = await loadCatalogFromSupabase().catch(() => null);
+        if (supabaseCatalog) {
+          useDashboardStore.getState().setCatalog(supabaseCatalog, true);
+          setSource("Supabase DB");
+        } else if (!useDashboardStore.getState().catalog) {
+          useDashboardStore.getState().setCatalog(DEFAULT_CATALOG, false);
         }
       } finally {
         if (mounted) setLoading(false);
@@ -173,6 +160,8 @@ export function CalculatorDashboard() {
       saveLocalHistory(store.history);
     }
   }, [loading, store.catalog, store.history, store.projectConfig]);
+
+  // ── Handlers ───────────────────────────────────────────────────────
 
   function snapshotAnd(action: () => void) {
     store.pushSnapshot();
@@ -201,7 +190,7 @@ export function CalculatorDashboard() {
 
   function handleProjectField(key: keyof ProjectConfig, value: string) {
     snapshotAnd(() => {
-      store.setProjectField(key as any, value);
+      store.setProjectField(key as keyof Omit<ProjectConfig, "version" | "lastSavedAt">, value);
       store.touchSavedAt();
     });
   }
@@ -229,6 +218,7 @@ export function CalculatorDashboard() {
     setSaveState("ย้อนกลับแล้ว");
   }
 
+  // JSON export/import
   function handleExportJson() {
     exportCurrentConfiguration({
       catalog,
@@ -240,35 +230,11 @@ export function CalculatorDashboard() {
     });
   }
 
-  function handleTemplateDownload(kind: "technician" | "multiplier") {
-    const workbook = createTemplateWorkbook(catalog);
-    if (kind === "technician") {
-      const blank = XLSX.utils.book_new();
-      if (workbook.Sheets.Technicians) XLSX.utils.book_append_sheet(blank, workbook.Sheets.Technicians, "Technicians");
-      downloadWorkbook("Technician Template.xlsx", blank);
-      return;
-    }
-    const blank = XLSX.utils.book_new();
-    if (workbook.Sheets.Multipliers) XLSX.utils.book_append_sheet(blank, workbook.Sheets.Multipliers, "Multipliers");
-    downloadWorkbook("Multiplier Template.xlsx", blank);
+  function handleImportJsonClick() {
+    jsonInputRef.current?.click();
   }
 
-  function handleExportPdf() {
-    exportPdf({
-      catalog,
-      projectConfig: {
-        ...store.projectConfig,
-        version: APP_VERSION,
-        lastSavedAt: new Date().toISOString()
-      }
-    });
-  }
-
-  function handleImportClick() {
-    fileInputRef.current?.click();
-  }
-
-  async function handleImportFile(file: File | null) {
+  async function handleImportJsonFile(file: File | null) {
     if (!file) return;
     try {
       const text = await file.text();
@@ -284,23 +250,84 @@ export function CalculatorDashboard() {
         }
       });
       setImportError(null);
-      setSaveState(`นำเข้าข้อมูล ${file.name}`);
+      setSaveState(`นำเข้า ${file.name}`);
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "ไฟล์ไม่ถูกต้อง");
+      setImportError(error instanceof Error ? error.message : "ไฟล์ JSON ไม่ถูกต้อง");
     }
   }
 
-  async function handleHardReload() {
+  // XLSX export/import
+  function handleExportXlsx() {
+    exportProjectXlsx({
+      catalog,
+      projectConfig: {
+        ...store.projectConfig,
+        version: APP_VERSION,
+        lastSavedAt: new Date().toISOString()
+      }
+    });
+  }
+
+  function handleImportXlsxClick() {
+    xlsxInputRef.current?.click();
+  }
+
+  async function handleImportXlsxFile(file: File | null) {
+    if (!file) return;
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const imported = importProjectXlsx(arrayBuffer);
+      if (!imported) {
+        throw new Error("ไม่สามารถอ่านข้อมูลจากไฟล์ Excel ได้ (ต้องมีชีท 'สรุปงาน')");
+      }
+
+      // Resolve multiplier IDs from names
+      const multNames = imported.selectedMultiplierIds || [];
+      const resolvedMultiplierIds = multipliers
+        .filter(m => multNames.includes(m.name) || multNames.includes(m.id))
+        .map(m => m.id);
+
+      snapshotAnd(() => {
+        store.importSnapshot({
+          ...store.projectConfig,
+          projectName: imported.projectName ?? store.projectConfig.projectName,
+          customerName: imported.customerName ?? store.projectConfig.customerName,
+          notes: imported.notes ?? store.projectConfig.notes,
+          selectedTechnicianIds: imported.selectedTechnicianIds ?? store.projectConfig.selectedTechnicianIds,
+          selectedMultiplierIds: resolvedMultiplierIds.length ? resolvedMultiplierIds : store.projectConfig.selectedMultiplierIds,
+          selectedPricingPlan: imported.selectedPricingPlan ?? store.projectConfig.selectedPricingPlan,
+          version: APP_VERSION,
+          lastSavedAt: new Date().toISOString()
+        });
+      });
+      setImportError(null);
+      setSaveState(`นำเข้า ${file.name}`);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "ไฟล์ Excel ไม่ถูกต้อง");
+    }
+  }
+
+  function handleExportPdf() {
+    exportPdf({
+      catalog,
+      projectConfig: {
+        ...store.projectConfig,
+        version: APP_VERSION,
+        lastSavedAt: new Date().toISOString()
+      }
+    });
+  }
+
+  async function handleReloadCatalog() {
     setLoading(true);
     try {
-      const [technicianBook, multiplierBook, pricingPlanBook] = await Promise.all([
-        readWorkbookFromUrl("/data/technicians.xlsx").catch(() => null),
-        readWorkbookFromUrl("/data/multipliers.xlsx").catch(() => null),
-        readWorkbookFromUrl("/data/pricing_plans.xlsx").catch(() => null)
-      ]);
-      const spreadsheetCatalog = catalogFromWorkbook(technicianBook, multiplierBook, pricingPlanBook);
-      if (spreadsheetCatalog) {
-        useDashboardStore.getState().setCatalog(spreadsheetCatalog, true);
+      const supabaseCatalog = await loadCatalogFromSupabase().catch(() => null);
+      if (supabaseCatalog) {
+        useDashboardStore.getState().setCatalog(supabaseCatalog, true);
+        setSource("Supabase DB");
+        setSaveState("โหลดข้อมูลจาก Supabase สำเร็จ");
+      } else {
+        setSaveState("ไม่พบข้อมูลจาก Supabase ใช้ค่าเริ่มต้น");
       }
     } finally {
       setLoading(false);
@@ -310,35 +337,41 @@ export function CalculatorDashboard() {
   const technicianGroups = groupTechnicians(technicians);
   const multiplierGroups = groupMultipliers(multipliers);
 
+  // ── Render ─────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen">
+      {/* Hidden file inputs */}
       <input
-        ref={fileInputRef}
+        ref={jsonInputRef}
         type="file"
         accept="application/json"
         className="hidden"
-        onChange={(event) => handleImportFile(event.target.files?.[0] ?? null)}
+        onChange={(event) => { handleImportJsonFile(event.target.files?.[0] ?? null); event.target.value = ""; }}
+      />
+      <input
+        ref={xlsxInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        className="hidden"
+        onChange={(event) => { handleImportXlsxFile(event.target.files?.[0] ?? null); event.target.value = ""; }}
       />
       <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+
       <div className="mx-auto flex max-w-[1680px] flex-col gap-6 px-4 py-4 md:px-6 md:py-6">
+        {/* ── Header ──────────────────────────────────────────────── */}
         <header className="rounded-3xl border border-border/70 bg-card/80 p-5 shadow-glow backdrop-blur md:p-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className="rounded-full px-3 py-1">
-                  ระบบคำนวณราคา
-                </Badge>
-                <Badge variant="outline" className="rounded-full px-3 py-1">
-                  เวอร์ชัน {APP_VERSION}
-                </Badge>
-                <Badge variant="outline" className="rounded-full px-3 py-1">
-                  แหล่งข้อมูล: {source}
-                </Badge>
+                <Badge variant="secondary" className="rounded-full px-3 py-1">ระบบคำนวณราคา</Badge>
+                <Badge variant="outline" className="rounded-full px-3 py-1">เวอร์ชัน {APP_VERSION}</Badge>
+                <Badge variant="outline" className="rounded-full px-3 py-1">แหล่งข้อมูล: {source}</Badge>
               </div>
               <div className="space-y-1">
                 <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">คำนวณราคา</h1>
                 <p className="max-w-3xl text-sm text-muted-foreground md:text-base">
-                  เลือกช่างที่ต้องการ เลือกตัวคูณความเสี่ยง และดาวน์โหลดใบเสนอราคาได้ทันที (ใช้ข้อมูลจากโฟลเดอร์ /public/data)
+                  เลือกช่างที่ต้องการ เลือกตัวคูณความเสี่ยง และดาวน์โหลดใบเสนอราคาได้ทันที
                 </p>
               </div>
             </div>
@@ -349,13 +382,21 @@ export function CalculatorDashboard() {
                 <Settings2 className="h-4 w-4" />
                 ตั้งค่า
               </Button>
-              <Button variant="outline" onClick={handleImportClick}>
-                <Import className="h-4 w-4" />
-                นำเข้าข้อมูล
+              <Button variant="outline" onClick={handleImportJsonClick}>
+                <FolderOpen className="h-4 w-4" />
+                เปิดโปรเจกต์ (.json)
               </Button>
               <Button variant="outline" onClick={handleExportJson}>
                 <FileJson2 className="h-4 w-4" />
-                บันทึกข้อมูล JSON
+                บันทึกโปรเจกต์ (.json)
+              </Button>
+              <Button variant="outline" onClick={handleImportXlsxClick}>
+                <FolderOpen className="h-4 w-4" />
+                เปิดไฟล์ Excel
+              </Button>
+              <Button variant="outline" onClick={handleExportXlsx}>
+                <FileSpreadsheet className="h-4 w-4" />
+                ดาวน์โหลด Excel
               </Button>
               <Button onClick={handleExportPdf}>
                 <Download className="h-4 w-4" />
@@ -363,6 +404,7 @@ export function CalculatorDashboard() {
               </Button>
             </div>
           </div>
+
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">ชื่อโครงการ</p>
@@ -398,12 +440,13 @@ export function CalculatorDashboard() {
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">ระบบการจัดเก็บ</p>
-              <p className="mt-3 text-lg font-semibold">เครื่องนี้ + Supabase (ถ้ามี)</p>
-              <p className="text-sm text-muted-foreground">ซิงค์คลาวด์อัตโนมัติหากมีการตั้งค่า Env</p>
+              <p className="mt-3 text-lg font-semibold">เครื่องนี้ + Supabase</p>
+              <p className="text-sm text-muted-foreground">ข้อมูลช่าง/ราคามาจาก Supabase</p>
             </div>
           </div>
         </header>
 
+        {/* ── Error Banner ─────────────────────────────────────────── */}
         {importError ? (
           <Card className="border-destructive/40 bg-destructive/10">
             <CardContent className="flex items-center gap-3 p-4">
@@ -413,9 +456,12 @@ export function CalculatorDashboard() {
           </Card>
         ) : null}
 
+        {/* ── Main Grid ───────────────────────────────────────────── */}
         <div className="grid gap-6 xl:grid-cols-[1.05fr_1.05fr_1fr]">
+
+          {/* Column 1: Pricing Plan + Technicians */}
           <div className="flex flex-col gap-6">
-            <Card className="overflow-hidden">
+            <Card>
               <CardHeader className="border-b border-border/70 bg-background/50">
                 <CardTitle>แผนราคา</CardTitle>
                 <CardDescription>เลือกแผนกำไรที่ต้องการใช้คำนวณ</CardDescription>
@@ -433,75 +479,22 @@ export function CalculatorDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="overflow-hidden flex-1">
+            <Card>
               <CardHeader className="border-b border-border/70 bg-background/50">
                 <CardTitle>ช่าง</CardTitle>
                 <CardDescription>เลือกช่างที่ต้องการให้ปฏิบัติงานในโครงการนี้</CardDescription>
               </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea className="h-[50vh]">
-                  <div className="space-y-6 p-6">
-                    {Object.entries(technicianGroups).map(([group, items]) => (
-                      <section key={group} className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <Badge className="rounded-full px-3 py-1">{group}</Badge>
-                          <span className="text-sm text-muted-foreground">{items.length} คน</span>
-                        </div>
-                        <div className="grid gap-3">
-                          {items.map((item) => {
-                            const checked = store.projectConfig.selectedTechnicianIds.includes(item.id);
-                            return (
-                              <label
-                                key={item.id}
-                                className={cn(
-                                  "flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4 transition",
-                                  checked ? "border-primary/50 bg-primary/10" : "border-border bg-background/60 hover:bg-accent/50"
-                                )}
-                              >
-                                <div className="flex items-center gap-4">
-                                  <Checkbox checked={checked} onCheckedChange={(value) => handleTechnicianToggle(item.id, value === true)} />
-                                  <div className="space-y-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <p className="text-base font-medium">{item.name}</p>
-                                      <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px]">
-                                        พร้อมทำงาน
-                                      </Badge>
-                                    </div>
-                                    <p className="text-sm text-muted-foreground">{item.group}</p>
-                                  </div>
-                                </div>
-                                <p className="text-lg font-semibold">{formatTHB(resolveTechnicianPrice(item, selectedPricingPlanId, pricingPlans, item.basePrice))}</p>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </section>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="overflow-hidden">
-            <CardHeader className="border-b border-border/70 bg-background/50">
-              <CardTitle>ตัวคูณ</CardTitle>
-              <CardDescription>เลือกความเสี่ยงที่เกี่ยวข้อง (สามารถเลือกซ้อนกันได้)</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <ScrollArea className="h-[62vh]">
-                <div className="space-y-6 p-6">
-                  {Object.entries(multiplierGroups).map(([category, items]) => (
-                    <section key={category} className="space-y-3">
+              <CardContent className="p-6">
+                <div className="space-y-6">
+                  {Object.entries(technicianGroups).map(([group, items]) => (
+                    <section key={group} className="space-y-3">
                       <div className="flex items-center gap-3">
-                        <Badge className="rounded-full px-3 py-1" variant="secondary">
-                          {category}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">{items.length} รายการ</span>
+                        <Badge className="rounded-full px-3 py-1">{group}</Badge>
+                        <span className="text-sm text-muted-foreground">{items.length} คน</span>
                       </div>
                       <div className="grid gap-3">
                         {items.map((item) => {
-                          const checked = store.projectConfig.selectedMultiplierIds.includes(item.id);
+                          const checked = store.projectConfig.selectedTechnicianIds.includes(item.id);
                           return (
                             <label
                               key={item.id}
@@ -511,13 +504,18 @@ export function CalculatorDashboard() {
                               )}
                             >
                               <div className="flex items-center gap-4">
-                                <Checkbox checked={checked} onCheckedChange={(value) => handleMultiplierToggle(item.id, value === true)} />
+                                <Checkbox checked={checked} onCheckedChange={(value) => handleTechnicianToggle(item.id, value === true)} />
                                 <div className="space-y-1">
-                                  <p className="text-base font-medium">{item.name}</p>
-                                  <p className="text-sm text-muted-foreground">{item.category}</p>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-base font-medium">{item.name}</p>
+                                    <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px]">
+                                      พร้อมทำงาน
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">{item.group}</p>
                                 </div>
                               </div>
-                              <p className="text-lg font-semibold">× {item.multiplier.toFixed(1)}</p>
+                              <p className="text-lg font-semibold">{formatTHB(resolveTechnicianPrice(item, selectedPricingPlanId, pricingPlans, item.basePrice))}</p>
                             </label>
                           );
                         })}
@@ -525,11 +523,55 @@ export function CalculatorDashboard() {
                     </section>
                   ))}
                 </div>
-              </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Column 2: Multipliers */}
+          <Card>
+            <CardHeader className="border-b border-border/70 bg-background/50">
+              <CardTitle>ตัวคูณ</CardTitle>
+              <CardDescription>เลือกความเสี่ยงที่เกี่ยวข้อง (สามารถเลือกซ้อนกันได้)</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-6">
+                {Object.entries(multiplierGroups).map(([category, items]) => (
+                  <section key={category} className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <Badge className="rounded-full px-3 py-1" variant="secondary">{category}</Badge>
+                      <span className="text-sm text-muted-foreground">{items.length} รายการ</span>
+                    </div>
+                    <div className="grid gap-3">
+                      {items.map((item) => {
+                        const checked = store.projectConfig.selectedMultiplierIds.includes(item.id);
+                        return (
+                          <label
+                            key={item.id}
+                            className={cn(
+                              "flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4 transition",
+                              checked ? "border-primary/50 bg-primary/10" : "border-border bg-background/60 hover:bg-accent/50"
+                            )}
+                          >
+                            <div className="flex items-center gap-4">
+                              <Checkbox checked={checked} onCheckedChange={(value) => handleMultiplierToggle(item.id, value === true)} />
+                              <div className="space-y-1">
+                                <p className="text-base font-medium">{item.name}</p>
+                                <p className="text-sm text-muted-foreground">{item.category}</p>
+                              </div>
+                            </div>
+                            <p className="text-lg font-semibold">× {item.multiplier.toFixed(1)}</p>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="sticky top-4 h-fit overflow-hidden xl:sticky">
+          {/* Column 3: Summary */}
+          <Card className="sticky top-4 h-fit xl:sticky">
             <CardHeader className="border-b border-border/70 bg-background/50">
               <CardTitle>สรุปการคำนวณ</CardTitle>
               <CardDescription>ดูตัวอย่างสูตรการคำนวณแบบเรียลไทม์</CardDescription>
@@ -540,15 +582,13 @@ export function CalculatorDashboard() {
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">แผนราคา</p>
                   <p className="mt-2 text-lg font-semibold">{selectedPricingPlanName}</p>
                 </div>
-                
+
                 <div className="rounded-2xl border border-border bg-background/70 p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">ช่างที่เลือก</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedTechnicians.length ? (
                       selectedTechnicians.map((item) => (
-                        <Badge key={item.id} variant="secondary" className="rounded-full px-3 py-1">
-                          {item.name}
-                        </Badge>
+                        <Badge key={item.id} variant="secondary" className="rounded-full px-3 py-1">{item.name}</Badge>
                       ))
                     ) : (
                       <span className="text-sm text-muted-foreground">ยังไม่ได้เลือกช่าง</span>
@@ -566,9 +606,7 @@ export function CalculatorDashboard() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedMultipliers.length ? (
                       selectedMultipliers.map((item) => (
-                        <Badge key={item.id} className="rounded-full px-3 py-1">
-                          {item.name} × {item.multiplier.toFixed(1)}
-                        </Badge>
+                        <Badge key={item.id} className="rounded-full px-3 py-1">{item.name} × {item.multiplier.toFixed(1)}</Badge>
                       ))
                     ) : (
                       <span className="text-sm text-muted-foreground">ยังไม่ได้เลือกตัวคูณ</span>
@@ -601,27 +639,19 @@ export function CalculatorDashboard() {
                   <RefreshCcw className="h-4 w-4" />
                   เริ่มใหม่
                 </Button>
-                <Button onClick={handleSaveConfiguration}>
+                <Button onClick={handleSaveConfiguration} className="col-span-2">
                   <Save className="h-4 w-4" />
                   บันทึก
                 </Button>
-                <Button variant="outline" onClick={handleHardReload}>
-                  <Files className="h-4 w-4" />
-                  โหลดข้อมูล Spreadsheet ใหม่
-                </Button>
-                <Button variant="outline" onClick={() => handleTemplateDownload("technician")}>
-                  <FileDown className="h-4 w-4" />
-                  ไฟล์แม่แบบช่าง.xlsx
-                </Button>
-                <Button variant="outline" onClick={() => handleTemplateDownload("multiplier")}>
-                  <FileDown className="h-4 w-4" />
-                  ไฟล์แม่แบบตัวคูณ.xlsx
+                <Button variant="outline" onClick={handleReloadCatalog} className="col-span-2">
+                  <RefreshCcw className="h-4 w-4" />
+                  โหลดข้อมูลจาก Supabase ใหม่
                 </Button>
               </div>
 
               <div className="grid gap-3 rounded-2xl border border-border bg-background/70 p-4 text-sm text-muted-foreground">
                 <div className="flex items-center justify-between">
-                  <span>แหล่งข้อมูล Spreadsheet</span>
+                  <span>แหล่งข้อมูล</span>
                   <span className="font-medium text-foreground">{source}</span>
                 </div>
                 <div className="flex items-center justify-between">

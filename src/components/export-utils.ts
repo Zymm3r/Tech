@@ -46,7 +46,116 @@ export function createConfigurationExport({ catalog, projectConfig }: ResultCont
 
 export function exportCurrentConfiguration(context: ResultContext) {
   const payload = createConfigurationExport(context);
-  downloadJson(`technician-pricing-dashboard-config-${format(new Date(), "yyyyMMdd-HHmmss")}.json`, payload);
+  downloadJson(`project-${format(new Date(), "yyyy-MM-dd")}.json`, payload);
+}
+
+// ── XLSX Project Export ──────────────────────────────────────────────
+
+export function exportProjectXlsx(context: ResultContext) {
+  const { catalog, projectConfig } = context;
+  const planId = projectConfig.selectedPricingPlan || "high-profit";
+  const plans = catalog.pricingPlans || [];
+  const planName = plans.find(p => p.plan_id === planId)?.plan_name || planId;
+
+  const selectedTechnicians = catalog.technicians.filter(t => projectConfig.selectedTechnicianIds.includes(t.id));
+  const selectedMultipliers = catalog.multipliers.filter(m => projectConfig.selectedMultiplierIds.includes(m.id));
+  const basePrice = calculateBasePrice(catalog.technicians, projectConfig.selectedTechnicianIds, planId, plans);
+  const multiplierProduct = calculateMultiplier(catalog.multipliers, projectConfig.selectedMultiplierIds);
+  const finalPrice = Math.round(calculateFinalPrice(basePrice, multiplierProduct));
+
+  // Sheet 1: สรุปงาน
+  const summarySheet = XLSX.utils.json_to_sheet([{
+    project_name: projectConfig.projectName || "",
+    customer_name: projectConfig.customerName || "",
+    pricing_plan: planId,
+    pricing_plan_name: planName,
+    base_price: basePrice,
+    final_price: finalPrice,
+    notes: projectConfig.notes || "",
+    created_at: new Date().toISOString()
+  }]);
+
+  // Sheet 2: ช่าง
+  const techSheet = XLSX.utils.json_to_sheet(
+    selectedTechnicians.map(t => ({
+      technician_id: t.id,
+      technician_name: t.name,
+      group: t.group,
+      resolved_price: resolveTechnicianPrice(t, planId, plans, t.basePrice)
+    }))
+  );
+
+  // Sheet 3: ตัวคูณ
+  const multSheet = XLSX.utils.json_to_sheet(
+    selectedMultipliers.map(m => ({
+      category: m.category,
+      name: m.name,
+      multiplier: m.multiplier
+    }))
+  );
+
+  // Sheet 4: สูตรคำนวณ
+  const resolvedPrices = selectedTechnicians.map(t => resolveTechnicianPrice(t, planId, plans, t.basePrice));
+  const priceBreakdown = selectedTechnicians.map((t, i) => `${t.name}: ${resolvedPrices[i]}`).join(", ");
+  const multiplierBreakdown = selectedMultipliers.map(m => `${m.name}: ×${m.multiplier.toFixed(1)}`).join(", ");
+  const formulaSheet = XLSX.utils.json_to_sheet([{
+    pricing_plan: planId,
+    pricing_plan_name: planName,
+    price_breakdown: priceBreakdown,
+    base_price: basePrice,
+    multiplier_breakdown: multiplierBreakdown,
+    multiplier_product: multiplierProduct,
+    final_price: finalPrice
+  }]);
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, summarySheet, "สรุปงาน");
+  XLSX.utils.book_append_sheet(workbook, techSheet, "ช่าง");
+  XLSX.utils.book_append_sheet(workbook, multSheet, "ตัวคูณ");
+  XLSX.utils.book_append_sheet(workbook, formulaSheet, "สูตรคำนวณ");
+
+  downloadWorkbook(`project-${format(new Date(), "yyyy-MM-dd")}.xlsx`, workbook);
+}
+
+// ── XLSX Project Import ──────────────────────────────────────────────
+
+export function importProjectXlsx(arrayBuffer: ArrayBuffer): Partial<ProjectConfig> | null {
+  try {
+    const workbook = XLSX.read(arrayBuffer, { type: "array" });
+
+    // Read สรุปงาน sheet
+    const summarySheet = workbook.Sheets["สรุปงาน"];
+    if (!summarySheet) return null;
+    const summaryRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(summarySheet, { defval: "" });
+    if (!summaryRows.length) return null;
+    const summary = summaryRows[0];
+
+    // Read ช่าง sheet
+    const techSheet = workbook.Sheets["ช่าง"];
+    const techRows = techSheet ? XLSX.utils.sheet_to_json<Record<string, unknown>>(techSheet, { defval: "" }) : [];
+    const selectedTechnicianIds = techRows.map(r => String(r.technician_id || "")).filter(Boolean);
+
+    // Read ตัวคูณ sheet
+    const multSheet = workbook.Sheets["ตัวคูณ"];
+    const multRows = multSheet ? XLSX.utils.sheet_to_json<Record<string, unknown>>(multSheet, { defval: "" }) : [];
+    const selectedMultiplierIds = multRows.map(r => String(r.name || "")).filter(Boolean);
+
+    // Read สูตรคำนวณ sheet for plan
+    const formulaSheet = workbook.Sheets["สูตรคำนวณ"];
+    const formulaRows = formulaSheet ? XLSX.utils.sheet_to_json<Record<string, unknown>>(formulaSheet, { defval: "" }) : [];
+    const planId = formulaRows.length ? String(formulaRows[0].pricing_plan || summary.pricing_plan || "high-profit") : String(summary.pricing_plan || "high-profit");
+
+    return {
+      projectName: String(summary.project_name || ""),
+      customerName: String(summary.customer_name || ""),
+      notes: String(summary.notes || ""),
+      selectedTechnicianIds,
+      selectedMultiplierIds,
+      selectedPricingPlan: planId
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function exportPdf(context: ResultContext) {
@@ -63,7 +172,6 @@ export function exportPdf(context: ResultContext) {
   const timestamp = new Date().toISOString();
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const width = doc.internal.pageSize.getWidth();
 
   doc.setFillColor(14, 165, 233);
   doc.roundedRect(40, 36, 42, 42, 10, 10, "F");
