@@ -168,6 +168,9 @@ export function importProjectXlsx(arrayBuffer: ArrayBuffer): Partial<ProjectConf
 
 /** Safe number formatter for PDF – uses " บาท" instead of ฿ symbol which crashes jsPDF's Thai font renderer */
 function pdfFormatPrice(value: number): string {
+  if (value === undefined || value === null || Number.isNaN(value)) {
+    return "0 บาท";
+  }
   return new Intl.NumberFormat("th-TH").format(value) + " บาท";
 }
 
@@ -195,6 +198,14 @@ export async function exportPdf(context: ResultContext) {
   const multiplierProduct = calculateMultiplier(activeMultipliers, projectConfig.selectedMultiplierIds);
   const finalPrice = Math.round(calculateFinalPrice(basePrice, multiplierProduct));
   
+  console.log({
+    basePrice,
+    multiplierProduct,
+    finalPrice,
+    selectedTechnicians,
+    selectedMultipliers
+  });
+
   const savedDate = projectConfig.lastSavedAt ? new Date(projectConfig.lastSavedAt) : new Date();
   const savedTimestamp = format(savedDate, "dd/MM/yyyy");
   const exportTimestamp = format(new Date(), "dd/MM/yyyy HH:mm:ss");
@@ -248,8 +259,8 @@ export async function exportPdf(context: ResultContext) {
   doc.text("บริษัท ซ่อมบำรุงและติดตั้ง จำกัด (ตัวอย่าง)", margin + 55, currentY + 32);
 
   // Right side: Document Title & Meta – manually position X instead of { align: "right" }
-  doc.setFontSize(22);
-  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(24);
+  doc.setTextColor(0, 0, 0);
   doc.text("ใบเสนอราคา", rightEdge - 40, currentY + 18);
   doc.setFontSize(10);
   doc.text("QUOTATION", rightEdge - 25, currentY + 32);
@@ -285,8 +296,8 @@ export async function exportPdf(context: ResultContext) {
   // ==========================================
   // LINE ITEMS: TECHNICIANS
   // ==========================================
-  doc.setFontSize(12);
-  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
   doc.text("1. รายการช่าง (Labor & Technicians)", margin, currentY);
   
   autoTable(doc, {
@@ -298,18 +309,17 @@ export async function exportPdf(context: ResultContext) {
       t.group,
       pdfFormatPrice(resolveTechnicianPrice(t, planId, plans, t.basePrice))
     ]),
-    styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
-    headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42] },
+    styles: { fontSize: 12, cellPadding: 6, font: "NotoSansThai", textColor: [0, 0, 0] },
+    headStyles: { fillColor: [241, 245, 249], textColor: [0, 0, 0] },
     columnStyles: { 3: { halign: 'right' } }
   });
 
   currentY = (doc as any).lastAutoTable.finalY + 15;
 
   // Subtotal for Technicians – manually position X
-  doc.setFontSize(10);
-  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
   doc.text(`รวมค่าแรงช่าง (${selectedTechnicians.length} คน):`, rightEdge - 160, currentY);
-  doc.setFontSize(11);
   doc.text(pdfFormatPrice(basePrice), rightEdge - 80, currentY);
   currentY += 30;
 
@@ -318,7 +328,8 @@ export async function exportPdf(context: ResultContext) {
   // ==========================================
   // LINE ITEMS: MULTIPLIERS
   // ==========================================
-  doc.setFontSize(12);
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
   doc.text("2. ปัจจัยและตัวคูณ (Multipliers & Adjustments)", margin, currentY);
 
   if (sortedMultipliers.length > 0) {
@@ -331,14 +342,14 @@ export async function exportPdf(context: ResultContext) {
         m.name,
         `×${m.multiplier.toFixed(1)}`
       ]),
-      styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
-      headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42] },
+      styles: { fontSize: 12, cellPadding: 6, font: "NotoSansThai", textColor: [0, 0, 0] },
+      headStyles: { fillColor: [241, 245, 249], textColor: [0, 0, 0] },
       columnStyles: { 3: { halign: 'right' } }
     });
     currentY = (doc as any).lastAutoTable.finalY + 15;
   } else {
-    doc.setFontSize(10);
-    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
     doc.text("- ไม่มีตัวคูณที่เลือก -", margin + 10, currentY + 20);
     currentY += 40;
   }
@@ -350,30 +361,25 @@ export async function exportPdf(context: ResultContext) {
   // ==========================================
   currentY += 10;
   doc.setFillColor(248, 250, 252); // slate-50
-  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.setDrawColor(0, 0, 0); // slate-200
   doc.rect(pageWidth - 280, currentY, 240, 95, "FD");
 
-  const summaryLabelX = rightEdge - 130;
-  const summaryValueX = rightEdge - 50;
+  const summaryLabelX = rightEdge - 150;
+  const summaryValueX = rightEdge - 60;
 
-  doc.setFontSize(11);
-  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
   doc.text("ยอดรวมค่าแรง (Base Subtotal):", summaryLabelX, currentY + 25);
-  doc.setTextColor(15, 23, 42);
   doc.text(pdfFormatPrice(basePrice), summaryValueX, currentY + 25);
 
-  doc.setTextColor(100, 116, 139);
   doc.text("ตัวคูณรวม (Total Multipliers):", summaryLabelX, currentY + 45);
-  doc.setTextColor(15, 23, 42);
   doc.text(`×${multiplierProduct.toFixed(2)}`, summaryValueX, currentY + 45);
 
   doc.line(pageWidth - 260, currentY + 55, rightEdge - 10, currentY + 55);
 
-  doc.setFontSize(14);
-  doc.setTextColor(15, 23, 42);
-  doc.text("ราคารวมสุทธิ (Grand Total):", summaryLabelX, currentY + 78);
   doc.setFontSize(16);
-  doc.setTextColor(14, 165, 233);
+  doc.text("ราคารวมสุทธิ (Grand Total):", summaryLabelX, currentY + 78);
+  doc.setFontSize(22);
   doc.text(pdfFormatPrice(finalPrice), summaryValueX, currentY + 78);
 
   currentY += 130;
@@ -407,17 +413,17 @@ export async function exportPdf(context: ResultContext) {
   doc.addPage();
   currentY = margin;
   
-  doc.setFontSize(12);
-  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
   doc.text("เอกสารแนบ: รายละเอียดและสูตรการคำนวณ (Calculation Breakdown)", margin, currentY);
   currentY += 20;
 
-  doc.setFontSize(10);
-  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
   doc.text("รายการช่าง:", margin, currentY);
   currentY += 15;
   
-  doc.setTextColor(15, 23, 42);
+  doc.setTextColor(0, 0, 0);
   selectedTechnicians.forEach((t) => {
     const p = resolveTechnicianPrice(t, planId, plans, t.basePrice);
     doc.text(`${t.name} (${t.group}) = ${pdfFormatPrice(p)}`, margin + 15, currentY);
@@ -430,11 +436,11 @@ export async function exportPdf(context: ResultContext) {
   currentY += 25;
 
   if (sortedMultipliers.length > 0) {
-    doc.setTextColor(100, 116, 139);
+    doc.setTextColor(0, 0, 0);
     doc.text("ตัวคูณ:", margin, currentY);
     currentY += 15;
     
-    doc.setTextColor(15, 23, 42);
+    doc.setTextColor(0, 0, 0);
     sortedMultipliers.forEach((m) => {
       doc.text(`${m.name} = ×${m.multiplier.toFixed(1)}`, margin + 15, currentY);
       currentY += 15;
@@ -443,17 +449,17 @@ export async function exportPdf(context: ResultContext) {
     currentY += 10;
   }
 
-  doc.setTextColor(100, 116, 139);
+  doc.setTextColor(0, 0, 0);
   doc.text("สมการคำนวณ (Formula):", margin, currentY);
   currentY += 15;
   
-  doc.setTextColor(15, 23, 42);
+  doc.setTextColor(0, 0, 0);
   const calculationSteps = [pdfFormatPrice(basePrice)];
   sortedMultipliers.forEach(m => calculationSteps.push(m.multiplier.toFixed(1)));
   doc.text(calculationSteps.join(" × "), margin + 15, currentY);
   
   currentY += 20;
-  doc.setFontSize(11);
+  doc.setFontSize(14);
   doc.text(`= ${pdfFormatPrice(finalPrice)}`, margin + 15, currentY);
 
   // ==========================================
