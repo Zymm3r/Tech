@@ -70,6 +70,7 @@ export function exportProjectXlsx(context: ResultContext) {
   // Sheet 1: สรุปงาน
   const summarySheet = XLSX.utils.json_to_sheet([{
     customer_name: projectConfig.customerName || "",
+    notes: projectConfig.notes || "",
     technicians_name: selectedTechnicians.map(t => t.name).join(", "),
     pricing_plan_name: planName,
     technicians_group: selectedTechnicians.map(t => t.group).join(", "),
@@ -78,7 +79,6 @@ export function exportProjectXlsx(context: ResultContext) {
     multipliers_value: selectedMultipliers.map(m => m.multiplier.toFixed(1)).join(", "),
     Total_multiplier: multiplierProduct,
     final_price: finalPrice,
-    notes: projectConfig.notes || "",
     created_at: new Date().toISOString()
   }]);
 
