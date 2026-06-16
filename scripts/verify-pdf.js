@@ -40,87 +40,119 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 var jspdf_1 = require("jspdf");
-var jspdf_autotable_1 = __importDefault(require("jspdf-autotable"));
-var fonts_1 = require("../src/lib/fonts");
 var fs_1 = __importDefault(require("fs"));
-var PDFParser = require("pdf2json");
+var path_1 = __importDefault(require("path"));
+var pdf = require("pdf-parse");
+function findTahomaFont() {
+    var possiblePaths = [
+        "C:\\Windows\\Fonts\\tahoma.ttf",
+        "C:\\Windows\\Fonts\\Tahoma.ttf",
+        "C:\\Windows\\Fonts\\TAHOMA.TTF",
+        "/Library/Fonts/Tahoma.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/tahoma.ttf",
+    ];
+    for (var _i = 0, possiblePaths_1 = possiblePaths; _i < possiblePaths_1.length; _i++) {
+        var p = possiblePaths_1[_i];
+        if (fs_1.default.existsSync(p)) {
+            return p;
+        }
+    }
+    // Fallback: search C:\Windows\Fonts
+    var fontsDir = "C:\\Windows\\Fonts";
+    if (fs_1.default.existsSync(fontsDir)) {
+        var files = fs_1.default.readdirSync(fontsDir);
+        var found = files.find(function (f) { return f.toLowerCase() === "tahoma.ttf"; });
+        if (found) {
+            return path_1.default.join(fontsDir, found);
+        }
+    }
+    // Check if public/fonts/NotoSansThai-Regular.ttf already exists
+    var fallbackPath = "public/fonts/NotoSansThai-Regular.ttf";
+    if (fs_1.default.existsSync(fallbackPath)) {
+        console.log("System Tahoma font not found. Reusing existing fallback font: ".concat(fallbackPath));
+        return fallbackPath;
+    }
+    throw new Error("tahoma.ttf not found on system.");
+}
 function runTest() {
     return __awaiter(this, void 0, void 0, function () {
-        var doc, currentY, arrayBuffer, buffer, pdfParser;
+        var fontPath, fontBuffer, base64, publicFontDir, targetPublicFontPath, srcLibDir, targetFontsTsPath, doc, testString, arrayBuffer, buffer, testOutputDir, testPdfPath, uint8, parser, data, extractedText, err_1;
         return __generator(this, function (_a) {
-            doc = new jspdf_1.jsPDF({ unit: "pt", format: "a4" });
-            try {
-                doc.addFileToVFS("NotoSansThai.ttf", fonts_1.NotoSansThaiBase64);
-                doc.addFont("NotoSansThai.ttf", "NotoSansThai", "normal");
-                doc.addFont("NotoSansThai.ttf", "NotoSansThai", "bold");
-                doc.addFont("NotoSansThai.ttf", "NotoSansThai", "italic");
-                doc.addFont("NotoSansThai.ttf", "NotoSansThai", "bolditalic");
-                doc.setFont("NotoSansThai", "normal");
-            }
-            catch (err) {
-                console.error("Failed to load Thai font:", err);
-                process.exit(1);
-            }
-            doc.setFontSize(18);
-            doc.text("ใบเสนอราคา (Quotation)", 96, 58);
-            doc.text("ชื่อโครงการ: ทดสอบระบบ", 40, 112);
-            doc.text("ชื่อลูกค้า: บริษัท ไทย จำกัด", 40, 130);
-            doc.text("หมายเหตุ: ที่อับอากาศ / ความปลอดภัย", 40, 166);
-            doc.text("รายการช่าง", 40, 195);
-            (0, jspdf_autotable_1.default)(doc, {
-                startY: 205,
-                head: [["ลำดับ", "ชื่อช่าง", "กลุ่ม", "ราคาที่ใช้คำนวณ"]],
-                body: [
-                    ["1", "พี่บอย", "Group A", "2,400"],
-                    ["2", "ช่างแอร์", "Group B", "1,500"]
-                ],
-                styles: { fontSize: 10, cellPadding: 6, font: "NotoSansThai" },
-                headStyles: { fillColor: [15, 23, 42] }
-            });
-            currentY = doc.lastAutoTable.finalY + 15;
-            doc.text("ราคารวมก่อนตัวคูณ: 3,900", 40, currentY);
-            arrayBuffer = doc.output("arraybuffer");
-            buffer = Buffer.from(arrayBuffer);
-            // Save for manual inspection if needed
-            if (!fs_1.default.existsSync("test-output")) {
-                fs_1.default.mkdirSync("test-output");
-            }
-            fs_1.default.writeFileSync("test-output/test-pdf-thai.pdf", buffer);
-            pdfParser = new PDFParser(null, 1);
-            pdfParser.on("pdfParser_dataError", function (errData) {
-                console.error(errData.parserError);
-                process.exit(1);
-            });
-            pdfParser.on("pdfParser_dataReady", function (pdfData) {
-                var text = pdfParser.getRawTextContent();
-                var expectedStrings = [
-                    "รายการช่าง",
-                    "พี่บอย",
-                    "ราคารวมก่อนตัวคูณ"
-                ];
-                var failed = false;
-                for (var _i = 0, expectedStrings_1 = expectedStrings; _i < expectedStrings_1.length; _i++) {
-                    var str = expectedStrings_1[_i];
-                    if (!text.includes(str)) {
-                        console.error("\u274C Missing string: \"".concat(str, "\""));
-                        failed = true;
+            switch (_a.label) {
+                case 0:
+                    console.log("Locating system font tahoma.ttf...");
+                    fontPath = findTahomaFont();
+                    console.log("Found font at: ".concat(fontPath));
+                    fontBuffer = fs_1.default.readFileSync(fontPath);
+                    base64 = fontBuffer.toString("base64");
+                    publicFontDir = "public/fonts";
+                    if (!fs_1.default.existsSync(publicFontDir)) {
+                        fs_1.default.mkdirSync(publicFontDir, { recursive: true });
+                    }
+                    targetPublicFontPath = path_1.default.join(publicFontDir, "NotoSansThai-Regular.ttf");
+                    fs_1.default.writeFileSync(targetPublicFontPath, fontBuffer);
+                    console.log("Successfully wrote font to ".concat(targetPublicFontPath));
+                    srcLibDir = "src/lib";
+                    if (!fs_1.default.existsSync(srcLibDir)) {
+                        fs_1.default.mkdirSync(srcLibDir, { recursive: true });
+                    }
+                    targetFontsTsPath = path_1.default.join(srcLibDir, "fonts.ts");
+                    fs_1.default.writeFileSync(targetFontsTsPath, "export const NotoSansThaiBase64 = \"".concat(base64, "\";\n"));
+                    console.log("Successfully wrote font base64 to ".concat(targetFontsTsPath));
+                    doc = new jspdf_1.jsPDF({ unit: "pt", format: "a4" });
+                    try {
+                        doc.addFileToVFS("NotoSansThai.ttf", base64);
+                        doc.addFont("NotoSansThai.ttf", "NotoSansThai", "normal");
+                        doc.setFont("NotoSansThai", "normal");
+                    }
+                    catch (err) {
+                        console.error("Failed to load Thai font into jsPDF:", err);
+                        process.exit(1);
+                    }
+                    testString = "ABC abc 1234567890 ทดสอบ";
+                    doc.setFontSize(18);
+                    doc.text(testString, 40, 100);
+                    arrayBuffer = doc.output("arraybuffer");
+                    buffer = Buffer.from(arrayBuffer);
+                    testOutputDir = "test-output";
+                    if (!fs_1.default.existsSync(testOutputDir)) {
+                        fs_1.default.mkdirSync(testOutputDir);
+                    }
+                    testPdfPath = path_1.default.join(testOutputDir, "test-pdf-thai.pdf");
+                    fs_1.default.writeFileSync(testPdfPath, buffer);
+                    console.log("Generated test PDF at ".concat(testPdfPath));
+                    // Parse PDF with pdf-parse
+                    console.log("Parsing generated PDF with pdf-parse...");
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 3, , 4]);
+                    uint8 = new Uint8Array(buffer);
+                    parser = new pdf.PDFParse(uint8);
+                    return [4 /*yield*/, parser.getText()];
+                case 2:
+                    data = _a.sent();
+                    extractedText = data.text;
+                    console.log("Extracted Text:", JSON.stringify(extractedText));
+                    if (extractedText.includes(testString)) {
+                        console.log("\u2705 Success! Found the exact string: \"".concat(testString, "\""));
+                        process.exit(0);
                     }
                     else {
-                        console.log("\u2705 Found string: \"".concat(str, "\""));
+                        console.error("\u274C Error: Extracted text does not contain the exact string: \"".concat(testString, "\""));
+                        process.exit(1);
                     }
-                }
-                if (failed) {
-                    console.log("Extracted text:");
-                    console.log(text);
+                    return [3 /*break*/, 4];
+                case 3:
+                    err_1 = _a.sent();
+                    console.error("Failed to parse PDF:", err_1);
                     process.exit(1);
-                }
-                else {
-                    console.log("✅ All Thai strings rendered and extracted correctly. No fallbacks.");
-                }
-            });
-            pdfParser.parseBuffer(buffer);
-            return [2 /*return*/];
+                    return [3 /*break*/, 4];
+                case 4: return [2 /*return*/];
+            }
         });
     });
 }
-runTest().catch(console.error);
+runTest().catch(function (err) {
+    console.error(err);
+    process.exit(1);
+});

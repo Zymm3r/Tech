@@ -277,18 +277,34 @@ export async function exportPdf(context: ResultContext) {
   doc.text(selectedPricingPlanName, rightEdge - 50, currentY + 15);
 
   // Customer Details (Left)
+  // Customer Details (Left) - Dynamic wrapping and height scaling
+  const notesText = `หมายเหตุ: ${projectConfig.notes || "-"}`;
+  doc.setFontSize(10);
+  const wrappedNotes = doc.splitTextToSize(notesText, 230);
+  const noteLineHeight = 12;
+  
+  const line1Y = currentY;
+  const line2Y = line1Y + 16;
+  const notesStartY = line2Y + 16;
+  const totalNotesHeight = wrappedNotes.length * noteLineHeight;
+  const boxHeight = (notesStartY + totalNotesHeight + 10) - (currentY - 15);
+  
   doc.setFillColor(248, 250, 252);
-  doc.rect(margin, currentY - 15, 250, 60, "F");
+  doc.rect(margin, currentY - 15, 250, boxHeight, "F");
+  
   doc.setTextColor(100, 116, 139);
-  doc.text("เสนอต่อ (Prepared For):", margin + 10, currentY);
+  doc.setFontSize(10);
+  doc.text("เสนอต่อ (Prepared For):", margin + 10, line1Y);
+  
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(12);
-  doc.text(String((projectConfig as any).customerName || "ลูกค้าทั่วไป"), margin + 10, currentY + 18);
+  doc.text(String(projectConfig.customerName || "ลูกค้าทั่วไป"), margin + 10, line2Y);
+  
   doc.setFontSize(10);
   doc.setTextColor(100, 116, 139);
-  doc.text(`หมายเหตุ: ${(projectConfig as any).notes || "-"}`, margin + 10, currentY + 35);
+  doc.text(wrappedNotes, margin + 10, notesStartY);
 
-  currentY += 70;
+  currentY = (currentY - 15) + boxHeight + 20;
   doc.setDrawColor(226, 232, 240);
   doc.line(margin, currentY, pageWidth - margin, currentY);
   currentY += 20;
@@ -418,49 +434,82 @@ export async function exportPdf(context: ResultContext) {
   doc.text("เอกสารแนบ: รายละเอียดและสูตรการคำนวณ (Calculation Breakdown)", margin, currentY);
   currentY += 20;
 
+  // Metadata summary section for parity with XLSX
+  doc.setFontSize(12);
+  doc.text("ข้อมูลสรุปโครงการ (Project Metadata):", margin, currentY);
+  currentY += 15;
+
+  doc.setFontSize(10);
+  doc.text(`• ชื่อลูกค้า (Customer Name): ${projectConfig.customerName || "-"}`, margin + 15, currentY);
+  currentY += 15;
+  doc.text(`• หมายเหตุ (Notes): ${projectConfig.notes || "-"}`, margin + 15, currentY);
+  currentY += 15;
+  doc.text(`• แผนราคาที่เลือก (Selected Pricing Plan): ${selectedPricingPlanName}`, margin + 15, currentY);
+  currentY += 15;
+  doc.text(`• ยอดรวมก่อนตัวคูณ (Base Price): ${pdfFormatPrice(basePrice)}`, margin + 15, currentY);
+  currentY += 15;
+  doc.text(`• ตัวคูณรวม (Total Multiplier): ×${multiplierProduct.toFixed(2)}`, margin + 15, currentY);
+  currentY += 15;
+  doc.text(`• ราคารวมสุทธิ (Final Price): ${pdfFormatPrice(finalPrice)}`, margin + 15, currentY);
+  currentY += 15;
+  doc.text(`• วันที่บันทึกข้อมูล (Saved At): ${savedTimestamp}`, margin + 15, currentY);
+  currentY += 15;
+  doc.text(`• วันที่ออกเอกสาร (Created At): ${new Date().toISOString()}`, margin + 15, currentY);
+  currentY += 25;
+  if (currentY > 750) { doc.addPage(); currentY = margin; }
+
   doc.setFontSize(12);
   doc.setTextColor(0, 0, 0);
-  doc.text("รายการช่าง:", margin, currentY);
+  doc.text("รายละเอียดราคาช่าง (Labor Prices):", margin, currentY);
   currentY += 15;
   
+  doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
   selectedTechnicians.forEach((t) => {
     const p = resolveTechnicianPrice(t, planId, plans, t.basePrice);
-    doc.text(`${t.name} (${t.group}) = ${pdfFormatPrice(p)}`, margin + 15, currentY);
+    doc.text(`• ${t.name} (${t.group}) = ${pdfFormatPrice(p)}`, margin + 15, currentY);
     currentY += 15;
     if (currentY > 780) { doc.addPage(); currentY = margin; }
   });
   
   currentY += 5;
-  doc.text(`รวมค่าแรง = ${pdfFormatPrice(basePrice)}`, margin + 15, currentY);
+  doc.setFontSize(10);
+  doc.text(`รวมค่าแรงเริ่มต้น = ${pdfFormatPrice(basePrice)}`, margin + 15, currentY);
   currentY += 25;
+  if (currentY > 750) { doc.addPage(); currentY = margin; }
 
   if (sortedMultipliers.length > 0) {
+    doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text("ตัวคูณ:", margin, currentY);
+    doc.text("รายละเอียดตัวคูณ (Multipliers):", margin, currentY);
     currentY += 15;
     
+    doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     sortedMultipliers.forEach((m) => {
-      doc.text(`${m.name} = ×${m.multiplier.toFixed(1)}`, margin + 15, currentY);
+      doc.text(`• ${m.name} (${m.category}) = ×${m.multiplier.toFixed(1)}`, margin + 15, currentY);
       currentY += 15;
       if (currentY > 780) { doc.addPage(); currentY = margin; }
     });
     currentY += 10;
   }
+  if (currentY > 750) { doc.addPage(); currentY = margin; }
 
+  doc.setFontSize(12);
   doc.setTextColor(0, 0, 0);
   doc.text("สมการคำนวณ (Formula):", margin, currentY);
   currentY += 15;
   
+  doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
-  const calculationSteps = [pdfFormatPrice(basePrice)];
-  sortedMultipliers.forEach(m => calculationSteps.push(m.multiplier.toFixed(1)));
-  doc.text(calculationSteps.join(" × "), margin + 15, currentY);
+  const formulaParts = [basePrice.toString()];
+  sortedMultipliers.forEach(m => formulaParts.push(m.multiplier.toString()));
+  const formulaString = `${formulaParts.join(" * ")} = ${finalPrice}`;
   
-  currentY += 20;
-  doc.setFontSize(14);
-  doc.text(`= ${pdfFormatPrice(finalPrice)}`, margin + 15, currentY);
+  // Wrap math formula to prevent bleeding
+  const wrappedFormula = doc.splitTextToSize(formulaString, 500);
+  doc.text(wrappedFormula, margin + 15, currentY);
+  currentY += wrappedFormula.length * doc.getLineHeight() + 10;
 
   // ==========================================
   // FOOTER (Applied to all pages)
